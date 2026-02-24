@@ -1,0 +1,44 @@
+.loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.dark .loading-shimmer {
+  background: linear-gradient(90deg, #374151 25%, #4b5563 50%, #374151 75%);
+  background-size: 200% 100%;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.slider-media-wrapper {
+  position: relative;
+  width: 100%;
+}
+.slider-media-wrapper[data-ratio="16:9"]::before {
+  content: "";
+  display: block;
+  padding-top: 56.25%; /* 16:9 */
+}
+.slider-media-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.slider-media-inner img,
+.slider-media-inner video,
+.slider-media-inner iframe {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}

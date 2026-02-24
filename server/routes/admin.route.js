@@ -1,0 +1,53 @@
+import { Router } from "express";
+import {
+  login,
+  logout,
+  updateUser,
+  deleteUser,
+} from "../controllers/admin.controller.js";
+import {
+  getUserCustomPricing,
+  createUserCustomPricing,
+  deleteUserCustomPricing,
+} from "../controllers/customePricing.controller.js";
+import { getStats } from "../controllers/stats.controller.js";
+import {
+  createDeposit,
+  createRefund,
+  getAdminTransactions,
+} from "../controllers/transaction.controller.js";
+
+import { verifyAdmin } from "../middleware/auth.middleware.js";
+
+const router = Router();
+
+// Admin login
+router.post("/login", login);
+
+// Admin logout
+router.post("/logout", logout);
+
+// Admin stats
+router.get("/stats", verifyAdmin, getStats);
+
+// Admin balance deposit
+router.post("/deposit", verifyAdmin, createDeposit);
+
+// Admin refund
+router.post("/refund", verifyAdmin, createRefund);
+
+// Admin transactions list
+router.get("/transactions", verifyAdmin, getAdminTransactions);
+
+// Admin user update
+router.patch("/user", verifyAdmin, updateUser);
+
+// Admin user delete
+router.delete("/user", verifyAdmin, deleteUser);
+
+// Admin custom pricing
+router.get("/custom-pricing", verifyAdmin, getUserCustomPricing);
+router.post("/custom-pricing", verifyAdmin, createUserCustomPricing);
+router.delete("/custom-pricing", verifyAdmin, deleteUserCustomPricing);
+
+export default router;

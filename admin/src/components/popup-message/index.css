@@ -1,0 +1,205 @@
+  /* Error Type Colors */
+
+.info-message.type-error.theme-light,
+.info-message.type-error.theme-dark {
+  --info-accent: #ef4444;
+  --info-focus-ring: #ef4444;
+}
+/* Info Message Container */
+.info-message-container {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.5rem;
+  z-index: 9999;
+  pointer-events: none;
+}
+
+/* Info Message Component */
+.info-message {
+  position: relative;
+  max-width: 400px;
+  min-width: 280px;
+  background: var(--info-bg, #ffffff);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--info-border, #e2e8f0);
+  overflow: hidden;
+  pointer-events: auto;
+  backdrop-filter: blur(10px);
+  border-left: 4px solid var(--info-accent, #3b82f6);
+  max-width: 90vw;
+
+}
+
+/* Info Message Header */
+.info-message-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  position: relative;
+}
+
+/* Info Message Content */
+.info-message-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.info-message-text {
+  margin: 0;
+  font-size: 14px;
+  color: var(--info-text-color, #1e293b);
+  line-height: 1.5;
+  word-wrap: break-word;
+  font-weight: 500;
+  width: fit-content;
+}
+
+/* Close Button */
+.info-message-close-btn {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--info-close-color, #94a3b8);
+  margin-top: 2px;
+}
+
+.info-message-close-btn:hover {
+  background: var(--info-close-hover-bg, #f1f5f9);
+  color: var(--info-close-hover-color, #64748b);
+}
+
+.info-message-close-btn:focus {
+  outline: 2px solid var(--info-focus-ring, #3b82f6);
+  outline-offset: 2px;
+}
+
+.close-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* Light Theme Colors */
+.info-message.theme-light {
+  --info-bg: #ffffff;
+  --info-border: #e2e8f0;
+  --info-accent: #3b82f6;
+  --info-text-color: #1e293b;
+  --info-close-color: #94a3b8;
+  --info-close-hover-bg: #f1f5f9;
+  --info-close-hover-color: #64748b;
+  --info-focus-ring: #3b82f6;
+}
+
+/* Dark Theme Colors */
+.info-message.theme-dark {
+  --info-bg: #1e293b;
+  --info-border: #334155;
+  --info-accent: #3b82f6;
+  --info-text-color: #f1f5f9;
+  --info-close-color: #64748b;
+  --info-close-hover-bg: #334155;
+  --info-close-hover-color: #94a3b8;
+  --info-focus-ring: #60a5fa;
+}
+
+/* System Dark Theme Support */
+@media (prefers-color-scheme: dark) {
+  .info-message:not(.theme-light) {
+    --info-bg: #1e293b;
+    --info-border: #334155;
+    --info-text-color: #f1f5f9;
+    --info-close-color: #64748b;
+    --info-close-hover-bg: #334155;
+    --info-close-hover-color: #94a3b8;
+  }
+}
+
+/* Animations */
+.info-message-enter {
+  animation: info-message-slide-in 0.3s ease-out forwards;
+}
+
+.info-message-exit {
+  animation: info-message-slide-out 0.3s ease-in forwards;
+}
+
+@keyframes info-message-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes info-message-slide-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10%) scale(0.95);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  .info-message-container {
+    top: 4rem;
+    left: 1rem;
+    right: 1rem;
+    transform: none;
+  }
+  
+  .info-message {
+    min-width: calc(100vw - 2rem);
+    max-width: calc(100vw - 2rem);
+  }
+  
+  .info-message-header {
+    padding: 14px 16px;
+    gap: 10px;
+  }
+  
+  .info-message-text {
+    font-size: 13px;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .info-message {
+    border-width: 2px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .info-message-close-btn {
+    border: 1px solid currentColor;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .info-message-enter,
+  .info-message-exit {
+    animation: none;
+    transition: opacity 0.2s ease;
+  }
+  
+  .info-message-close-btn {
+    transition: none;
+  }
+} 

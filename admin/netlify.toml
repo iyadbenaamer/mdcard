@@ -1,0 +1,16 @@
+
+[[redirects]]
+from = "/storage/*"
+to = "https://socially-5u3q.onrender.com/storage/:splat"
+status = 200
+force = true
+
+[[redirects]]
+from = "/assets/*"
+to = "https://socially-5u3q.onrender.com/assets/:splat"
+status = 200
+force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
