@@ -4,215 +4,55 @@ import User from "../models/user.model.js";
 import CardType from "../models/cardType.model.js";
 import Card from "../models/card.model.js";
 import { decryptCardCode } from "../utils/cardCodeCrypto.js";
-
-import { client } from "../services/elasticsearch.js";
 import { handleError } from "../utils/errorHandler.js";
 import parsePagination from "../utils/parsePagination.js";
 
-const USER_INDEX_NAME = "users";
-const CARD_TYPE_INDEX_NAME = "card_types";
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-// Build search query for partial and fuzzy matching
-const buildSearchQuery = (searchTerm) => {
-  const term = searchTerm.trim().toLowerCase();
-  const terms = term.split(/\s+/); // Split by one or more spaces
-
-  return {
-    bool: {
-      should: [
-        // Full name search using multi_match
-        {
-          multi_match: {
-            query: term,
-            fields: ["name^3", "phone^1.5"],
-            type: "best_fields",
-            operator: "or",
-            boost: 4,
-          },
-        },
-        // Individual term search
-        ...terms.map((t) => ({
-          multi_match: {
-            query: t,
-            fields: ["name^2", "phone^1.5"],
-            type: "best_fields",
-            operator: "or",
-            boost: 2,
-          },
-        })),
-        // Wildcard matches for partial text
-        {
-          bool: {
-            should: [
-              { wildcard: { name: { value: `*${term}*`, boost: 1 } } },
-              { wildcard: { phone: { value: `*${term}*`, boost: 1.2 } } },
-            ],
-          },
-        },
-        // Fuzzy matches for typo tolerance
-        {
-          bool: {
-            should: [
-              {
-                fuzzy: {
-                  name: { value: term, fuzziness: "AUTO", boost: 0.7 },
-                },
-              },
-              {
-                fuzzy: {
-                  phone: { value: term, fuzziness: "AUTO", boost: 0.6 },
-                },
-              },
-            ],
-          },
-        },
-      ],
-      minimum_should_match: 1,
-    },
-  };
-};
-
-// Build search query for card types (name only)
-const buildCardTypeSearchQuery = (searchTerm) => {
-  const term = searchTerm.trim().toLowerCase();
+const buildUserSearchFilter = (searchTerm) => {
+  const term = searchTerm.trim();
   const terms = term.split(/\s+/);
 
-  return {
-    bool: {
-      should: [
-        {
-          match: {
-            name: {
-              query: term,
-              boost: 4,
-            },
-          },
-        },
-        ...terms.map((t) => ({
-          match: {
-            name: {
-              query: t,
-              boost: 2,
-            },
-          },
-        })),
-        {
-          wildcard: {
-            name: {
-              value: `*${term}*`,
-              boost: 1.5,
-            },
-          },
-        },
-        {
-          fuzzy: {
-            name: {
-              value: term,
-              fuzziness: "AUTO",
-              boost: 0.8,
-            },
-          },
-        },
-      ],
-      minimum_should_match: 1,
-    },
+  const patterns = new Set();
+  const addPattern = (t) => {
+    const trimmed = t.trim();
+    if (!trimmed) return;
+    patterns.add(escapeRegex(trimmed));
   };
+
+  addPattern(term);
+  terms.forEach(addPattern);
+
+  const orConditions = [];
+  for (const p of patterns) {
+    const regex = new RegExp(p, "i");
+    orConditions.push({ name: regex }, { phone: regex });
+  }
+
+  return orConditions.length > 0 ? { $or: orConditions } : {};
 };
 
-// Build prefix query for card type autocomplete
-const buildCardTypePrefixQuery = (searchTerm) => {
-  const term = searchTerm.trim().toLowerCase();
-  return {
-    bool: {
-      should: [
-        {
-          prefix: {
-            name: {
-              value: term,
-              boost: 2.0,
-            },
-          },
-        },
-      ],
-      minimum_should_match: 1,
-    },
+const buildCardTypeSearchFilter = (searchTerm) => {
+  const term = searchTerm.trim();
+  const terms = term.split(/\s+/);
+
+  const patterns = new Set();
+  const addPattern = (t) => {
+    const trimmed = t.trim();
+    if (!trimmed) return;
+    patterns.add(escapeRegex(trimmed));
   };
-};
 
-// Process search results and fetch full user data using aggregation
-const processSearchResults = async (searchResults, userId) => {
-  const ids = searchResults.hits.hits.map((hit) => hit._id);
-  if (!ids || ids.length === 0) return [];
+  addPattern(term);
+  terms.forEach(addPattern);
 
-  const objectIds = ids.map((id) => new Types.ObjectId(id));
+  const orConditions = [];
+  for (const p of patterns) {
+    const regex = new RegExp(p, "i");
+    orConditions.push({ name: regex });
+  }
 
-  // Build aggregation pipeline to preserve ES order and compute counts
-  const pipeline = [
-    { $match: { _id: { $in: objectIds } } },
-    {
-      $project: {
-        name: 1,
-        phone: 1,
-        createdAt: 1,
-        isActive: 1,
-      },
-    },
-  ];
-
-  // Sort by the original Elasticsearch order
-  pipeline.push({ $sort: { __order: 1 } });
-
-  pipeline.push({
-    $project: {
-      _id: 1,
-      name: 1,
-      phone: 1,
-      createdAt: 1,
-      isActive: 1,
-    },
-  });
-
-  const users = await User.aggregate(pipeline);
-  return users;
-};
-
-// Process card type search results and fetch full data
-const processCardTypeSearchResults = async (searchResults) => {
-  const ids = searchResults.hits.hits.map((hit) => hit._id);
-  if (!ids || ids.length === 0) return [];
-
-  const objectIds = ids.map((id) => new Types.ObjectId(id));
-
-  const pipeline = [
-    { $match: { _id: { $in: objectIds } } },
-    {
-      $addFields: {
-        __order: { $indexOfArray: [ids, { $toString: "$_id" }] },
-      },
-    },
-    {
-      $project: {
-        name: 1,
-        image: 1,
-        isActive: 1,
-        createdAt: 1,
-        __order: 1,
-      },
-    },
-    { $sort: { __order: 1 } },
-    {
-      $project: {
-        _id: 1,
-        name: 1,
-        image: 1,
-        isActive: 1,
-        createdAt: 1,
-      },
-    },
-  ];
-
-  const cardTypes = await CardType.aggregate(pipeline);
-  return cardTypes;
+  return orConditions.length > 0 ? { $or: orConditions } : {};
 };
 
 // Main search endpoint
@@ -228,13 +68,10 @@ export const search = async (req, res) => {
       return res.status(400).json({ code: "SEARCH_QUERY_TOO_LONG" });
     }
 
-    const searchResults = await client.search({
-      index: USER_INDEX_NAME,
-      query: buildSearchQuery(query),
-    });
-
-    const userId = req.user?._id || req.user?.id;
-    const users = await processSearchResults(searchResults, userId);
+    const users = await User.find(buildUserSearchFilter(query))
+      .select("name phone createdAt isActive")
+      .sort({ createdAt: -1 })
+      .limit(50);
     return res.json(users);
   } catch (err) {
     return handleError(err, res);
@@ -254,12 +91,10 @@ export const searchCardTypes = async (req, res) => {
       return res.status(400).json({ code: "SEARCH_QUERY_TOO_LONG" });
     }
 
-    const searchResults = await client.search({
-      index: CARD_TYPE_INDEX_NAME,
-      query: buildCardTypeSearchQuery(query),
-    });
-
-    const cardTypes = await processCardTypeSearchResults(searchResults);
+    const cardTypes = await CardType.find(buildCardTypeSearchFilter(query))
+      .select("name image isActive createdAt")
+      .sort({ createdAt: -1 })
+      .limit(50);
     return res.json(cardTypes);
   } catch (err) {
     return handleError(err, res);

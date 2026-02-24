@@ -1,7 +1,5 @@
 import { Schema, model } from "mongoose";
 
-import { indexUserDocument } from "../services/elasticsearch.js";
-
 const userSchema = new Schema(
   {
     phone: { type: String, unique: true, max: 20, required: true },
@@ -40,15 +38,6 @@ const userSchema = new Schema(
   },
   { timestamps: true },
 );
-
-// indexing the user in elasticsearch
-userSchema.post("save", async function (doc) {
-  try {
-    await indexUserDocument(doc);
-  } catch (error) {
-    console.error("Error indexing document in Elasticsearch:", error);
-  }
-});
 
 const User = model("User", userSchema);
 export default User;

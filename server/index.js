@@ -18,7 +18,6 @@ import cardTypeRoute from "./routes/cardType.route.js";
 import cardTierRoute from "./routes/cardTier.route.js";
 import cardRoute from "./routes/card.route.js";
 import transactionRoute from "./routes/transaction.route.js";
-import { initializeElasticsearch } from "./services/elasticsearch.js";
 import connectDB from "./config/db.js";
 
 /*CONFIGURATIONS*/
@@ -70,10 +69,6 @@ const server = createServer(app);
 
 const startServer = async () => {
   try {
-    // Initialize Elasticsearch
-    await initializeElasticsearch();
-
-    // Start the server
     server.listen(PORT, () => console.log(`Server Connected on Port: ${PORT}`));
   } catch (error) {
     console.error("Failed to start server:", error);

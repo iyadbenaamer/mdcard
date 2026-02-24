@@ -86,10 +86,8 @@ export const signup = async (req, res) => {
         expiresIn: CODE_EXPIRATION,
       },
     );
-    // TODO:
     // sends the verification code to the user's phone number
-    // await sendCode(phone, verificationCode);
-    console.log(verificationCode);
+    await sendCode(phone, verificationCode);
     newUser.verificationStatus.token = verificationToken;
     newUser.verificationStatus.remainingAttempts = MAX_CODE_ATTEMPTS;
     newUser.verificationStatus.codesSentCount = 1;
@@ -180,7 +178,7 @@ export const login = async (req, res) => {
         },
       );
       // send phone with verification code if the phone isn't verified
-      // await sendCode(phone, verificationCode);
+      await sendCode(phone, verificationCode);
       console.log(verificationCode);
       user.verificationStatus.token = verificationToken;
       user.verificationStatus.remainingAttempts = MAX_CODE_ATTEMPTS;
