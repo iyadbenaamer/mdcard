@@ -59,7 +59,7 @@ const User = () => {
           params: { id },
         });
         if (!isMounted) return;
-        setUser(response.data);
+        setUser(response.data.profile);
       } catch (err) {
         if (!isMounted) return;
         setError("تعذر تحميل بيانات المستخدم. حاول مرة أخرى.");

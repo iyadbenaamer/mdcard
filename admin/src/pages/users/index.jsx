@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState, useCallback } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 import Layout from "layout";
 import PrimaryBtn from "components/PrimaryBtn";
@@ -10,6 +10,8 @@ import {
   TableHead,
   TableRow,
 } from "components/Table";
+import { useDialog } from "components/dialog/DialogContext";
+import AddUserDialog from "./components/AddUserDialog";
 import axiosClient from "utils/AxiosClient";
 import formatArabicDate from "utils/formatArabicDate";
 import SearchIcon from "assets/icons/search.svg?react";
@@ -27,43 +29,47 @@ const Users = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [reloadFlag, setReloadFlag] = useState(0); // used to trigger refetch when user added
 
+  const { openDialog, closeDialog } = useDialog();
+  const location = useLocation();
+
+  const fetchUsers = useCallback(async () => {
+    // do not trigger when searching; searches handled separately
+    if (searchQuery.trim()) return;
+
+    setIsLoading(true);
+    setError("");
+    try {
+      const response = await axiosClient.get("/user/all", {
+        params: {
+          page,
+          limit: USERS_PER_PAGE,
+          sortBy,
+          sortOrder,
+        },
+      });
+      setUsers(response.data?.users ?? []);
+      setTotalUsers(response.data?.total ?? 0);
+      setTotalPages(response.data?.totalPages ?? 1);
+    } catch (err) {
+      setError("تعذر تحميل المستخدمين. حاول مرة أخرى.");
+      setUsers([]);
+      setTotalUsers(0);
+      setTotalPages(1);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [page, sortBy, sortOrder, searchQuery]);
+
+  // fetch initially and whenever relevant state changes or reloadFlag increments
   useEffect(() => {
     let isMounted = true;
-    const fetchUsers = async () => {
-      if (searchQuery.trim()) {
-        return;
-      }
-      setIsLoading(true);
-      setError("");
-      try {
-        const response = await axiosClient.get("/user/all", {
-          params: {
-            page,
-            limit: USERS_PER_PAGE,
-            sortBy,
-            sortOrder,
-          },
-        });
-        if (!isMounted) return;
-        setUsers(response.data?.users ?? []);
-        setTotalUsers(response.data?.total ?? 0);
-        setTotalPages(response.data?.totalPages ?? 1);
-      } catch (err) {
-        if (!isMounted) return;
-        setError("تعذر تحميل المستخدمين. حاول مرة أخرى.");
-        setUsers([]);
-        setTotalUsers(0);
-        setTotalPages(1);
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    };
-    fetchUsers();
+    if (isMounted) fetchUsers();
     return () => {
       isMounted = false;
     };
-  }, [page, sortBy, sortOrder, searchQuery]);
+  }, [fetchUsers, reloadFlag]);
 
   const handleSearchSubmit = async (event) => {
     event.preventDefault();
@@ -96,6 +102,32 @@ const Users = () => {
     setSearchQuery("");
     setPage(1);
   };
+
+  const handleUserAdded = () => {
+    // after a new user is created refresh list and reset paging
+    setPage(1);
+    setReloadFlag((f) => f + 1);
+  };
+
+  const openCreateDialog = () => {
+    openDialog(
+      <AddUserDialog
+        onAdded={handleUserAdded}
+        onClose={() => {
+          closeDialog();
+          navigate("/users", { replace: true });
+        }}
+      />,
+    );
+  };
+
+  // open dialog if query param present
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("create") === "true") {
+      openCreateDialog();
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (page > totalPages) {
@@ -130,9 +162,7 @@ const Users = () => {
               إجمالي المستخدمين: {totalUsers}
             </p>
           </div>
-          <PrimaryBtn onClick={() => navigate("/users?create=true")}>
-            إنشاء مستخدم جديد
-          </PrimaryBtn>
+          <PrimaryBtn onClick={openCreateDialog}>إنشاء مستخدم جديد</PrimaryBtn>
         </div>
 
         <div className="mt-6 rounded-2xl border border-slate-200 bg-white/80 px-4 py-4 shadow-sm">
