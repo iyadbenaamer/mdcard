@@ -10,6 +10,7 @@ import HomeIcon from "assets/icons/home.svg?react";
 import CategoriesIcon from "assets/icons/categories.svg?react";
 import UsersIcon from "assets/icons/users.svg?react";
 import CardIcon from "assets/icons/card.svg?react";
+import SettingsIcon from "assets/icons/settings.svg?react";
 import LogoutIcon from "assets/icons/logout.svg?react";
 
 const Sidebar = ({ showLogo = true, onItemClick }) => {
@@ -39,6 +40,9 @@ const Sidebar = ({ showLogo = true, onItemClick }) => {
           </SidebarItem>
           <SidebarItem to="/cards" name="جميع البطاقات" onClick={onItemClick}>
             <CardIcon />
+          </SidebarItem>
+          <SidebarItem to="/settings" name="الإعدادات" onClick={onItemClick}>
+            <SettingsIcon />
           </SidebarItem>
         </ul>
       </div>

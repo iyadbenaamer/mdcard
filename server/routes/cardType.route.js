@@ -26,7 +26,11 @@ router.get("/by-category", verifyToken, getByCategory);
 router.post(
   "/",
   verifyAdmin,
-  upload.single("media"),
+  // accept both `media` (card type image) and `printImage` (printable image)
+  upload.fields([
+    { name: "media", maxCount: 1 },
+    { name: "printImage", maxCount: 1 },
+  ]),
   uploadSingleFile,
   createOne,
 );
@@ -35,7 +39,10 @@ router.patch(
   "/",
   verifyAdmin,
   verifyId,
-  upload.single("media"),
+  upload.fields([
+    { name: "media", maxCount: 1 },
+    { name: "printImage", maxCount: 1 },
+  ]),
   uploadSingleFile,
   updateOne,
 );

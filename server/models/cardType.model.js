@@ -10,6 +10,10 @@ const cardTypeSchema = new Schema(
       required: true,
     },
     name: { type: String, required: true },
+    // Template string printed on each card (supports placeholders: {code}, {serial}, {title}, {tier})
+    redeemFormat: String,
+    // Optional image URL or storage path to print on the card (can be an asset module, URL or data URI)
+    printImage: { type: String },
     order: { type: Number, default: 0 },
     image: { type: String },
     isActive: { type: Boolean, default: true },

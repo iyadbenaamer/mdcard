@@ -70,9 +70,24 @@ export const compressImages = async (req, res, next) => {
 
 export const uploadSingleFile = async (req, res, next) => {
   try {
-    if (!req.file) return next();
-    const { file } = req;
-    req.filePath = `${uploadsFolder}${file.filename}`;
+    // Support both single-file uploads (req.file) and named fields via req.files
+    // If using upload.fields, multer will populate req.files with arrays per field.
+    if (!req.file && !req.files) return next();
+
+    if (req.file) {
+      req.filePath = `${uploadsFolder}${req.file.filename}`;
+    }
+
+    if (req.files) {
+      // legacy: media field
+      if (req.files.media && Array.isArray(req.files.media) && req.files.media[0]) {
+        req.filePath = `${uploadsFolder}${req.files.media[0].filename}`;
+      }
+      // new: printImage field
+      if (req.files.printImage && Array.isArray(req.files.printImage) && req.files.printImage[0]) {
+        req.printFilePath = `${uploadsFolder}${req.files.printImage[0].filename}`;
+      }
+    }
     next();
   } catch (err) {
     return handleError(err, res);

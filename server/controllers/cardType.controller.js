@@ -264,6 +264,8 @@ export const createOne = async (req, res) => {
   try {
     let { name, isActive, categoryId, order } = req.body;
     const image = req.filePath;
+    const printImage = req.printFilePath ?? req.body.printImage;
+    const redeemFormat = req.body.redeemFormat?.trim();
     name = name?.trim();
     if (!name) {
       return res.status(400).json({ code: "CARD_TYPE_NAME_REQUIRED" });
@@ -300,6 +302,8 @@ export const createOne = async (req, res) => {
       categoryId,
       name,
       image,
+      printImage,
+      redeemFormat,
       order: nextOrder,
       isActive:
         typeof normalizedIsActive === "boolean"
@@ -319,6 +323,8 @@ export const updateOne = async (req, res) => {
     const { id } = req.query;
     let { name, isActive } = req.body;
     const image = req.filePath ?? req.body.image;
+    const printImage = req.printFilePath ?? req.body.printImage;
+    const redeemFormat = req.body.redeemFormat;
 
     const cardType = await CardType.findById(id);
     if (!cardType) {
@@ -342,6 +348,18 @@ export const updateOne = async (req, res) => {
       cardType.image = image;
     }
 
+    if (printImage !== undefined) {
+      if (cardType.printImage && cardType.printImage !== printImage) {
+        const oldPrintPath = path.join(process.cwd(), "public", cardType.printImage);
+        await safeDelete(oldPrintPath);
+      }
+      cardType.printImage = printImage;
+    }
+
+    if (redeemFormat !== undefined) {
+      cardType.redeemFormat = redeemFormat?.trim() || "";
+    }
+
     const normalizedIsActive =
       isActive === "true" ? true : isActive === "false" ? false : isActive;
 
@@ -352,10 +370,14 @@ export const updateOne = async (req, res) => {
     await cardType.save();
     return res.status(200).json(cardType);
   } catch (err) {
+    // If update failed but we uploaded files, clean them up
     if (req.filePath) {
-      // If update failed but we uploaded a file, clean it up
       const newImagePath = path.join(process.cwd(), "public", req.filePath);
       await safeDelete(newImagePath);
+    }
+    if (req.printFilePath) {
+      const newPrintPath = path.join(process.cwd(), "public", req.printFilePath);
+      await safeDelete(newPrintPath);
     }
     return handleError(err, res);
   }
@@ -378,6 +400,10 @@ export const deleteOne = async (req, res) => {
     if (cardType.image) {
       const imagePath = path.join(process.cwd(), "public", cardType.image);
       await safeDelete(imagePath);
+    }
+    if (cardType.printImage) {
+      const printPath = path.join(process.cwd(), "public", cardType.printImage);
+      await safeDelete(printPath);
     }
 
     await cardType.deleteOne();

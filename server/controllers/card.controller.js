@@ -600,6 +600,10 @@ export const checkoutCart = async (req, res) => {
       return res.status(403).json({ code: "USER_CANNOT_BUY" });
     }
 
+    // Helper to avoid floating-point rounding issues for currency (cents precision)
+    const roundToCents = (v) =>
+      Math.round((Number(v) + Number.EPSILON) * 100) / 100;
+
     let totalCost = 0;
     const availabilityResults = [];
     let hasAvailabilityIssue = false;
@@ -701,6 +705,8 @@ export const checkoutCart = async (req, res) => {
         }
 
         currentBalance -= item.buyPrice;
+        // Keep balance rounded to cents after each deduction to prevent accumulated FP error
+        currentBalance = roundToCents(currentBalance);
 
         fulfilledCards.push(card._id);
         purchasedCards.push(withDecryptedCode(card));
@@ -718,12 +724,14 @@ export const checkoutCart = async (req, res) => {
     }
 
     // 4. Update the user balance to reflect whatever was successfully charged
-    user.balance = currentBalance;
+    user.balance = roundToCents(currentBalance);
     await user.save();
 
     let savedOrder = null;
     if (orderItems.length > 0) {
-      const actualTotalCost = balanceBeforeWholeOrder - currentBalance;
+      const actualTotalCost = roundToCents(
+        balanceBeforeWholeOrder - currentBalance,
+      );
       const order = new Order({
         userId: user._id,
         totalAmount: actualTotalCost,
@@ -735,8 +743,8 @@ export const checkoutCart = async (req, res) => {
         userId: user._id,
         type: "purchase",
         amount: actualTotalCost,
-        balanceBefore: balanceBeforeWholeOrder,
-        balanceAfter: currentBalance,
+        balanceBefore: roundToCents(balanceBeforeWholeOrder),
+        balanceAfter: roundToCents(currentBalance),
         orderId: savedOrder._id,
       });
       await transaction.save();
@@ -794,6 +802,9 @@ export const getOrders = async (req, res) => {
             return {
               ...card,
               code: decryptCardCode(card.code),
+              // include type-level print fields so mobile can print directly
+              redeemFormat: item.tierId?.typeId?.redeemFormat || null,
+              printImage: item.tierId?.typeId?.printImage || null,
             };
           }
           return card;
@@ -801,7 +812,7 @@ export const getOrders = async (req, res) => {
       }));
       return orderObj;
     });
-
+    console.log(payload);
     const totalPages = Math.ceil(total / limit);
     return res.status(200).json({
       orders: payload,
@@ -853,6 +864,9 @@ export const getOrderById = async (req, res) => {
           return {
             ...card,
             code: decryptCardCode(card.code),
+            // include type-level print fields so mobile can print directly
+            redeemFormat: item.tierId?.typeId?.redeemFormat || null,
+            printImage: item.tierId?.typeId?.printImage || null,
           };
         }
         return card;

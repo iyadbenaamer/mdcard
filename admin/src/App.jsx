@@ -15,6 +15,7 @@ import { BreadcrumbProvider } from "components/breadcrumb/BreadcrumbContext";
 import User from "pages/users/user";
 import ManageCards from "pages/manage-cards";
 import Cards from "pages/cards";
+import Settings from "pages/settings";
 
 const App = () => {
   //if user is stored in redux state, then the user is logged in
@@ -73,6 +74,17 @@ const App = () => {
                     element={
                       isLoggedin ? (
                         <ManageCards />
+                      ) : (
+                        <Navigate to="/login" replace />
+                      )
+                    }
+                  />
+
+                  <Route
+                    path="/settings"
+                    element={
+                      isLoggedin ? (
+                        <Settings />
                       ) : (
                         <Navigate to="/login" replace />
                       )

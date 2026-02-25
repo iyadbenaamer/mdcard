@@ -18,6 +18,7 @@ import cardTypeRoute from "./routes/cardType.route.js";
 import cardTierRoute from "./routes/cardTier.route.js";
 import cardRoute from "./routes/card.route.js";
 import transactionRoute from "./routes/transaction.route.js";
+import settingRoute from "./routes/setting.route.js";
 import connectDB from "./config/db.js";
 
 /*CONFIGURATIONS*/
@@ -60,6 +61,7 @@ app.use("/api/card-types", cardTypeRoute);
 app.use("/api/card-tiers", cardTierRoute);
 app.use("/api/cards", cardRoute);
 app.use("/api/transactions", transactionRoute);
+app.use("/api/settings", settingRoute);
 
 /*MONGOOSE SETUP*/
 connectDB();

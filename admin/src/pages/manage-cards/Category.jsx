@@ -25,7 +25,6 @@ const Category = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const [deleteTypeId, setDeleteTypeId] = useState(null);
   const { openDialog, closeDialog } = useDialog();
   const { setLevels } = useBreadcrumb();
 
@@ -151,7 +150,6 @@ const Category = () => {
       if (!typeId) {
         return { ok: false, error: "تعذر تحديد نوع البطاقة." };
       }
-      setDeleteTypeId(typeId);
       setError("");
       setSuccessMessage("");
       try {
@@ -170,15 +168,13 @@ const Category = () => {
           };
         }
         return { ok: false, error: "تعذر حذف نوع البطاقة. حاول مرة أخرى." };
-      } finally {
-        setDeleteTypeId(null);
       }
     },
     [fetchCardTypes],
   );
 
   const handleCreateType = useCallback(
-    async ({ name, image, isActive }) => {
+    async ({ name, image, printImage, redeemFormat, isActive }) => {
       const trimmed = name.trim();
       if (!trimmed) {
         return { ok: false, error: "اسم نوع البطاقة مطلوب." };
@@ -195,6 +191,12 @@ const Category = () => {
         if (image) {
           formData.append("media", image);
         }
+        if (printImage) {
+          formData.append("printImage", printImage);
+        }
+        if (redeemFormat) {
+          formData.append("redeemFormat", redeemFormat?.trim() ?? "");
+        }
         await axiosClient.post("/card-types", formData);
         await fetchCardTypes({ skipDraft: true });
         setSuccessMessage("تم إنشاء نوع البطاقة بنجاح.");
@@ -209,6 +211,8 @@ const Category = () => {
   const CreateTypeDialog = ({ onCreate, onCancel }) => {
     const [name, setName] = useState("");
     const [image, setImage] = useState(null);
+    const [printImage, setPrintImage] = useState(null);
+    const [redeemFormat, setRedeemFormat] = useState("");
     const [isActive, setIsActive] = useState(true);
     const [dialogError, setDialogError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -225,10 +229,23 @@ const Category = () => {
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
-          <ImageUpload
-            label="الصورة (اختياري)"
-            value={image}
-            onChange={setImage}
+          <div className="flex gap-2">
+            <ImageUpload
+              label="الصورة (اختياري)"
+              value={image}
+              onChange={setImage}
+            />
+            <ImageUpload
+              label="صورة الطباعة (اختياري)"
+              value={printImage}
+              onChange={setPrintImage}
+            />
+          </div>
+          <CustomInput
+            label="نموذج التعبئة (اختياري)"
+            value={redeemFormat}
+            onChange={(e) => setRedeemFormat(e.target.value)}
+            placeholder="مثال: استخدم الكود {code}"
           />
           <ToggleSwitch
             label="مفعّل"
@@ -254,7 +271,13 @@ const Category = () => {
             onClick={async () => {
               setIsSubmitting(true);
               setDialogError("");
-              const result = await onCreate({ name, image, isActive });
+              const result = await onCreate({
+                name,
+                image,
+                printImage,
+                redeemFormat,
+                isActive,
+              });
               if (result?.ok) {
                 onCancel();
               } else if (result?.error) {
@@ -393,8 +416,9 @@ const Category = () => {
             {activeList.map((type, index) => (
               <div
                 key={type._id}
-                className={`grid grid-cols-12 gap-3 p-3  transition ${isEditing ? "bg-white" : "hover:bg-slate-50"
-                  }`}
+                className={`grid grid-cols-12 gap-3 p-3  transition ${
+                  isEditing ? "bg-white" : "hover:bg-slate-50"
+                }`}
                 role={isEditing ? undefined : "button"}
                 tabIndex={isEditing ? undefined : 0}
                 onClick={() =>

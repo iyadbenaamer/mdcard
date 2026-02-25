@@ -6,6 +6,7 @@ import User from "../models/user.model.js";
 import { generateCode } from "../utils/generateCode.js";
 import { sendCode } from "../services/sendCode.js";
 import { handleError } from "../utils/errorHandler.js";
+import Setting from "../models/setting.model.js";
 
 const MAX_CODE_ATTEMPTS = 20;
 const RESEND_FIRST_TWO_DELAY_MS = 60 * 1000;
@@ -201,7 +202,22 @@ export const login = async (req, res) => {
       rememberMe: Boolean(rememberMe),
     });
 
+    const support = await Setting.findOne({ key: "support" }).select("value");
+
     return res.status(200).json({
+      profile: {
+        id: user.id,
+        phone: user.phone,
+        profile: user.profile,
+        name: user.name,
+        balance: user.balance,
+        isActive: user.isActive,
+        canBuy: user.canBuy,
+        canSendCode: user.canSendCode,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+      support: support?.value || "",
       isVerified,
       accessToken,
     });

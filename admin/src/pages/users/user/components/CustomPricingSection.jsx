@@ -5,9 +5,30 @@ import CustomInput from "components/CustomInput";
 import PrimaryBtn from "components/PrimaryBtn";
 import SubmitBtn from "components/SubmitBtn";
 import RedBtn from "components/RedBtn";
-import { Table, TableBody, TableCell, TableHead, TableRow } from "components/Table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+} from "components/Table";
 import { useDialog } from "components/dialog/DialogContext";
 import { formatAmount, formatArabicDateTime, safeValue } from "../utils";
+
+// Map backend error codes to user-friendly Arabic messages
+const translateCustomPricingError = (code, fallback) => {
+  const map = {
+    CUSTOM_PRICING_USER_ID_INVALID: "تعذر تحديد المستخدم.",
+    CUSTOM_PRICING_TIER_ID_INVALID: "تعذر تحديد الفئة.",
+    CUSTOM_PRICING_BUY_PRICE_INVALID: "سعر الشراء غير صالح.",
+    USER_NOT_FOUND: "المستخدم غير موجود.",
+    CARD_TIER_NOT_FOUND: "الفئة غير موجودة.",
+    CUSTOM_PRICING_EXISTS: "يوجد تسعير مخصص لهذه الفئة بالفعل.",
+    CUSTOM_PRICING_ID_INVALID: "تعذر تحديد التسعير المطلوب.",
+    CUSTOM_PRICING_NOT_FOUND: "التسعير المخصص غير موجود.",
+  };
+  return map[code] || fallback || code || "حدث خطأ. حاول مرة أخرى.";
+};
 
 const CreatePricingDialog = ({ userId, onCreate, onCancel }) => {
   const [categories, setCategories] = useState([]);
@@ -260,7 +281,14 @@ const CustomPricingSection = ({ userId }) => {
       const list = Array.isArray(response.data) ? response.data : [];
       setPricingRules(list);
     } catch (err) {
-      setPricingError("تعذر تحميل التسعير المخصص. حاول مرة أخرى.");
+      const code = err?.response?.data?.code;
+      const message = err?.response?.data?.message;
+      setPricingError(
+        translateCustomPricingError(
+          code,
+          message || "تعذر تحميل التسعير المخصص. حاول مرة أخرى.",
+        ),
+      );
       setPricingRules([]);
     } finally {
       setIsPricingLoading(false);
@@ -293,7 +321,15 @@ const CustomPricingSection = ({ userId }) => {
       setPricingSuccess("تم إضافة تسعير مخصص بنجاح.");
       return { ok: true };
     } catch (err) {
-      return { ok: false, error: "تعذر إنشاء التسعير المخصص. حاول مرة أخرى." };
+      const code = err?.response?.data?.code;
+      const message = err?.response?.data?.message;
+      return {
+        ok: false,
+        error: translateCustomPricingError(
+          code,
+          message || "تعذر إنشاء التسعير المخصص. حاول مرة أخرى.",
+        ),
+      };
     }
   };
 
@@ -312,8 +348,14 @@ const CustomPricingSection = ({ userId }) => {
       setPricingSuccess("تم حذف التسعير المخصص بنجاح.");
       return { ok: true };
     } catch (err) {
-      setPricingError("تعذر حذف التسعير المخصص. حاول مرة أخرى.");
-      return { ok: false, error: "تعذر حذف التسعير المخصص." };
+      const code = err?.response?.data?.code;
+      const message = err?.response?.data?.message;
+      const translated = translateCustomPricingError(
+        code,
+        message || "تعذر حذف التسعير المخصص. حاول مرة أخرى.",
+      );
+      setPricingError(translated);
+      return { ok: false, error: translated };
     } finally {
       setPricingDeleteId(null);
     }
@@ -362,7 +404,9 @@ const CustomPricingSection = ({ userId }) => {
     <div className="rounded-2xl border border-slate-200 bg-white/80 p-5 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h2 className="text-sm font-semibold text-slate-700">التسعير المخصص</h2>
+          <h2 className="text-sm font-semibold text-slate-700">
+            التسعير المخصص
+          </h2>
           <p className="mt-1 text-xs text-slate-500">
             أسعار خاصة لهذا المستخدم حسب الفئة
           </p>
@@ -412,7 +456,9 @@ const CustomPricingSection = ({ userId }) => {
                   <TableCell>{safeValue(rule.tierTitle)}</TableCell>
                   <TableCell>{formatAmount(rule.buyPrice)}</TableCell>
                   <TableCell>
-                    {rule.createdAt ? formatArabicDateTime(rule.createdAt) : "—"}
+                    {rule.createdAt
+                      ? formatArabicDateTime(rule.createdAt)
+                      : "—"}
                   </TableCell>
                   <TableCell className="text-left">
                     <RedBtn

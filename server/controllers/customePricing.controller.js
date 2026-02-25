@@ -2,8 +2,6 @@ import mongoose from "mongoose";
 
 import CustomePricing from "../models/customePricing.model.js";
 import CardTier from "../models/cardTier.model.js";
-import CardType from "../models/cardType.model.js";
-import CardCategory from "../models/cardCategory.model.js";
 import User from "../models/user.model.js";
 
 import { handleError } from "../utils/errorHandler.js";
@@ -101,9 +99,10 @@ export const createUserCustomPricing = async (req, res) => {
       return res.status(404).json({ code: "CARD_TIER_NOT_FOUND" });
     }
 
-    const existingRule = await CustomePricing.findOne({ userId, tierId }).select(
-      "_id",
-    );
+    const existingRule = await CustomePricing.findOne({
+      userId,
+      tierId,
+    }).select("_id");
     if (existingRule) {
       return res.status(409).json({ code: "CUSTOM_PRICING_EXISTS" });
     }

@@ -22,10 +22,12 @@ const CardType = () => {
   const typeId = searchParams.get("cardTypeId");
   const [cardTypeName, setCardTypeName] = useState("");
   const [categoryName, setCategoryName] = useState("");
-  const [cardTypeOrder, setCardTypeOrder] = useState(0);
   const [cardTypeImage, setCardTypeImage] = useState("");
+  const [cardTypePrintImage, setCardTypePrintImage] = useState("");
   const [cardTypeIsActive, setCardTypeIsActive] = useState(true);
   const [draftImageFile, setDraftImageFile] = useState(null);
+  const [draftPrintImageFile, setDraftPrintImageFile] = useState(null);
+  const [redeemFormat, setRedeemFormat] = useState("");
   const [tiers, setTiers] = useState([]);
   const [draftTiers, setDraftTiers] = useState([]);
   const [isEditing, setIsEditing] = useState(false);
@@ -53,6 +55,8 @@ const CardType = () => {
       // So I should keep categoryName coming from fetchTiers for now OR fetch category separately.
       // Wait, let me check the controller again to be sure.
       setCardTypeImage(data.image ?? "");
+      setCardTypePrintImage(data.printImage ?? "");
+      setRedeemFormat(data.redeemFormat ?? "");
       setCardTypeIsActive(data.isActive ?? true);
 
       // Update breadcrumb if we have the name
@@ -64,7 +68,6 @@ const CardType = () => {
         }
         return newLevels;
       });
-
     } catch (err) {
       console.error(err);
       setError("تعذر تحميل تفاصيل نوع البطاقة.");
@@ -88,7 +91,7 @@ const CardType = () => {
           params: { typeId },
         });
         const payload = response.data ?? {};
-        // /card-tiers returns { name, categoryName, tiers: [] } 
+        // /card-tiers returns { name, categoryName, tiers: [] }
         // We can still use it for categoryName and breadcrumb init
         if (payload.categoryName) {
           setCategoryName(payload.categoryName);
@@ -145,6 +148,7 @@ const CardType = () => {
   const handleEditStart = () => {
     setDraftTiers(tiers);
     setDraftImageFile(null);
+    setDraftPrintImageFile(null);
     setIsEditing(true);
     setError("");
     setSuccessMessage("");
@@ -153,6 +157,7 @@ const CardType = () => {
   const handleCancel = () => {
     setDraftTiers(tiers);
     setDraftImageFile(null);
+    setDraftPrintImageFile(null);
     setIsEditing(false);
     setError("");
     setSuccessMessage("");
@@ -191,8 +196,12 @@ const CardType = () => {
       const formData = new FormData();
       formData.append("name", cardTypeName.trim());
       formData.append("isActive", String(cardTypeIsActive));
+      formData.append("redeemFormat", (redeemFormat || "").trim());
       if (draftImageFile) {
         formData.append("media", draftImageFile);
+      }
+      if (draftPrintImageFile) {
+        formData.append("printImage", draftPrintImageFile);
       }
       await axiosClient.patch(`/card-types?id=${typeId}`, formData);
 
@@ -212,6 +221,7 @@ const CardType = () => {
       }
 
       setDraftImageFile(null);
+      setDraftPrintImageFile(null);
       setIsEditing(false);
       setSuccessMessage("تم حفظ التغييرات بنجاح.");
       setSuccessMessage("تم حفظ التغييرات بنجاح.");
@@ -396,14 +406,44 @@ const CardType = () => {
                     />
                   ) : (
                     <div className="flex flex-col items-center gap-2 text-slate-400">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.5 12.75l6 6 9-13.5" />
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-8 w-8 opacity-50"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.5}
+                          d="M4.5 12.75l6 6 9-13.5"
+                        />
                       </svg>
                       <span className="text-xs">لا توجد صورة</span>
                     </div>
                   )}
                 </div>
               )}
+              <div className="mt-3">
+                {isEditing ? (
+                  <ImageUpload
+                    value={draftPrintImageFile}
+                    onChange={setDraftPrintImageFile}
+                    existingUrl={cardTypePrintImage}
+                    label="صورة الطباعة"
+                    className="aspect-square h-auto w-full"
+                  />
+                ) : cardTypePrintImage ? (
+                  <div className="mt-3">
+                    <img
+                      src={cardTypePrintImage}
+                      alt={cardTypeName + " print"}
+                      className="h-24 w-full object-contain"
+                    />
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             {/* Info Column */}
@@ -444,6 +484,25 @@ const CardType = () => {
                 )}
               </div>
 
+              {/* Redeem Format Field */}
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-500">
+                  صيغة التعبئة (اختياري)
+                </label>
+                {isEditing ? (
+                  <CustomInput
+                    value={redeemFormat}
+                    onChange={(e) => setRedeemFormat(e.target.value)}
+                    dir="ltr"
+                    placeholder="مثال: *121*{code}#"
+                  />
+                ) : (
+                  <div className="text-sm text-slate-700">
+                    {redeemFormat || <span className="text-slate-400">-</span>}
+                  </div>
+                )}
+              </div>
+
               {/* Status Field */}
               <div className="pt-2">
                 {isEditing ? (
@@ -458,12 +517,17 @@ const CardType = () => {
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-500">الحالة:</span>
                     <span
-                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${cardTypeIsActive
-                        ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
-                        : "bg-slate-50 text-slate-600 ring-slate-500/10"
-                        }`}
+                      className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ring-1 ring-inset ${
+                        cardTypeIsActive
+                          ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20"
+                          : "bg-slate-50 text-slate-600 ring-slate-500/10"
+                      }`}
                     >
-                      <span className={`mr-1.5 h-1.5 w-1.5 rounded-full ${cardTypeIsActive ? "bg-emerald-600" : "bg-slate-400"}`}></span>
+                      <span
+                        className={`mr-1.5 h-1.5 w-1.5 rounded-full ${
+                          cardTypeIsActive ? "bg-emerald-600" : "bg-slate-400"
+                        }`}
+                      ></span>
                       {cardTypeIsActive ? "مفعّل" : "غير مفعّل"}
                     </span>
                   </div>
@@ -478,9 +542,7 @@ const CardType = () => {
           {successMessage}
         </div>
       )}
-      <h1 className="mt-4 text-2xl font-semibold text-slate-800">
-        الفئات
-      </h1>
+      <h1 className="mt-4 text-2xl font-semibold text-slate-800">الفئات</h1>
       <div className="mt-4 mb-0 mx-auto w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         {isLoading ? (
           <div className="px-4 py-10 text-center text-sm text-slate-500">
@@ -492,7 +554,7 @@ const CardType = () => {
           </div>
         ) : activeList.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-slate-500">
-            لا توجد فئات للعرض
+            لا توجد فئات متاحة
           </div>
         ) : (
           <Table columns={tableColumns}>
@@ -501,8 +563,9 @@ const CardType = () => {
               {activeList.map((tier, index) => (
                 <TableRow
                   key={tier._id}
-                  className={`${isEditing ? "bg-white" : "hover:bg-slate-50"} ${isEditing ? "" : "cursor-pointer"
-                    }`}
+                  className={`${isEditing ? "bg-white" : "hover:bg-slate-50"} ${
+                    isEditing ? "" : "cursor-pointer"
+                  }`}
                   role={isEditing ? undefined : "button"}
                   tabIndex={isEditing ? undefined : 0}
                   onClick={() =>
