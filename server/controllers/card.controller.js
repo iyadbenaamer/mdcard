@@ -812,7 +812,7 @@ export const getOrders = async (req, res) => {
       }));
       return orderObj;
     });
-    console.log(payload);
+
     const totalPages = Math.ceil(total / limit);
     return res.status(200).json({
       orders: payload,

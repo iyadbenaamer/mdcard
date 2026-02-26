@@ -55,6 +55,11 @@ export const updateOne = async (req, res) => {
       return res.status(400).json({ code: "SETTING_ID_INVALID" });
     }
 
+    // load existing so we can protect support key
+    const existingSetting = await Setting.findById(id);
+    if (!existingSetting)
+      return res.status(404).json({ code: "SETTING_NOT_FOUND" });
+
     const update = {};
     const { key, value, description, group } = req.body;
     if (key !== undefined) update.key = key?.toString().trim();
@@ -66,7 +71,19 @@ export const updateOne = async (req, res) => {
       return res.status(400).json({ code: "SETTING_NO_UPDATE_FIELDS" });
     }
 
-    // no special handling for support
+    // do not allow renaming the support key
+    if (
+      existingSetting.key === "support" &&
+      update.key &&
+      update.key !== "support"
+    ) {
+      return res
+        .status(403)
+        .json({
+          code: "SETTING_CANNOT_RENAME",
+          message: "Cannot rename support setting",
+        });
+    }
 
     // If key is being updated, ensure uniqueness
     if (update.key) {
@@ -82,7 +99,6 @@ export const updateOne = async (req, res) => {
       { $set: update },
       { new: true },
     );
-    if (!updated) return res.status(404).json({ code: "SETTING_NOT_FOUND" });
     return res.status(200).json(updated);
   } catch (err) {
     return handleError(err, res);
@@ -104,12 +120,24 @@ export const updateMany = async (req, res) => {
       }
 
       if (id) {
+        // protect support key from being renamed via bulk edit
+        const existing = await Setting.findById(id);
         const update = {};
         if (key !== undefined) update.key = key?.toString().trim();
         if (value !== undefined) update.value = value;
         if (description !== undefined) update.description = description;
         if (group !== undefined) update.group = group;
         if (Object.keys(update).length === 0) continue;
+
+        if (
+          existing &&
+          existing.key === "support" &&
+          update.key &&
+          update.key !== "support"
+        ) {
+          // skip attempts to rename support
+          delete update.key;
+        }
 
         if (update.key) {
           const exists = await Setting.findOne({
@@ -158,8 +186,17 @@ export const deleteOne = async (req, res) => {
     if (!id || !Types.ObjectId.isValid(id)) {
       return res.status(400).json({ code: "SETTING_ID_INVALID" });
     }
+    const setting = await Setting.findById(id);
+    if (!setting) return res.status(404).json({ code: "SETTING_NOT_FOUND" });
+    if (setting.key === "support") {
+      return res
+        .status(403)
+        .json({
+          code: "SETTING_CANNOT_DELETE",
+          message: "Cannot delete support setting",
+        });
+    }
     const deleted = await Setting.findByIdAndDelete(id);
-    if (!deleted) return res.status(404).json({ code: "SETTING_NOT_FOUND" });
     return res.status(200).json({ message: "SETTING_DELETED" });
   } catch (err) {
     return handleError(err, res);

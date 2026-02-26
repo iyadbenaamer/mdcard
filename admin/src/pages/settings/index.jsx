@@ -31,7 +31,16 @@ const Settings = () => {
     setLoading(true);
     try {
       const res = await axiosClient.get("/settings/all");
-      const list = res.data || [];
+      let list = res.data || [];
+      // always display support entry client‑side even if missing from backend
+      if (!list.find((it) => it.key === "support")) {
+        list.unshift({
+          key: "support",
+          value: null,
+          description: "",
+          _id: null,
+        });
+      }
       setSettings(list);
     } catch (err) {
       console.error(err);
@@ -62,6 +71,11 @@ const Settings = () => {
   };
 
   const handleDelete = async (setting) => {
+    if (setting.key === "support") {
+      // support is static and cannot be removed
+      setMessage({ type: "error", text: "لا يمكن حذف الإعداد الثابت" });
+      return;
+    }
     try {
       await axiosClient.delete(`/settings/${setting._id}`);
       setSettings((s) => s.filter((it) => it._id !== setting._id));
@@ -101,7 +115,6 @@ const Settings = () => {
       // merge updated into current settings, preserving untouched entries
       const nextSettings = [...settings];
       for (const item of updated) {
-        if (item.key === "support") continue; // ignore support
         const idx = nextSettings.findIndex(
           (it) => it._id === item._id || it.key === item.key,
         );
@@ -126,16 +139,12 @@ const Settings = () => {
 
   const hasChanges = useMemo(() => Object.keys(edits).length > 0, [edits]);
 
-  /* ---------------------------------- */
-  /* UI */
-  /* ---------------------------------- */
-
   return (
     <Layout>
       <div className="p-8 max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800">⚙️ الإعدادات</h1>
+          <h1 className="text-3xl font-bold text-gray-800"> الإعدادات</h1>
 
           <div className="flex gap-3">
             <button
@@ -150,7 +159,7 @@ const Settings = () => {
                 onClick={handleStartEditAll}
                 className="px-5 py-2.5 bg-amber-500 text-white rounded-xl shadow hover:bg-amber-600 transition"
               >
-                تعديل الكل
+                تعديل
               </button>
             )}
           </div>
@@ -216,7 +225,7 @@ const Settings = () => {
                       {s.key}
                     </div>
 
-                    {editingAll && s.key !== "support" ? (
+                    {editingAll ? (
                       <input
                         value={edits[s.key] ?? ""}
                         onChange={(e) =>
@@ -242,7 +251,7 @@ const Settings = () => {
                     )}
                   </div>
 
-                  {!editingAll && s._id && (
+                  {!editingAll && s._id && s.key !== "support" && (
                     <button
                       onClick={() => handleDelete(s)}
                       className="text-sm px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition"
