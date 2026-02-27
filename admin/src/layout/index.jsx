@@ -40,7 +40,7 @@ const Layout = ({ children }) => {
           <div
             className={`border-t border-white/10 overflow-hidden transition-all duration-200 ease-out ${
               isMenuOpen
-                ? "max-h-96 opacity-100"
+                ? "max-h-120 opacity-100"
                 : "max-h-0 opacity-0 pointer-events-none"
             }`}
           >

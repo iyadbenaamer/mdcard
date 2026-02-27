@@ -149,7 +149,7 @@ const Settings = () => {
           <div className="flex gap-3">
             <button
               onClick={handleOpenAdd}
-              className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl shadow hover:bg-indigo-700 transition"
+              className="px-4 py-1 bg-primary text-white rounded-xl shadow hover:bg-secondary transition"
             >
               + إضافة
             </button>
@@ -157,7 +157,7 @@ const Settings = () => {
             {!editingAll && (
               <button
                 onClick={handleStartEditAll}
-                className="px-5 py-2.5 bg-amber-500 text-white rounded-xl shadow hover:bg-amber-600 transition"
+                className="px-4 py-1 bg-amber-500 text-white rounded-xl shadow hover:bg-amber-600 transition"
               >
                 تعديل
               </button>

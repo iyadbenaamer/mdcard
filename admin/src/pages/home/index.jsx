@@ -43,7 +43,7 @@ const Home = () => {
 
   const formatNumber = (value) => {
     if (typeof value !== "number") return "—";
-    return value.toLocaleString("ar-LY");
+    return value.toLocaleString("en-LY");
   };
 
   const percentOfTotal = (part, total) => {

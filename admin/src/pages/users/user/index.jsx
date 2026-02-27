@@ -107,8 +107,15 @@ const User = () => {
       { label: "رقم الهاتف", value: safeValue(user.phone) },
       { label: "الرصيد", value: safeValue(user.balance) },
       {
-        label: "الحالة",
+        label: "حالة الحساب",
         value: user.isActive ? "مفعّل" : "معطّل",
+        badge: true,
+      },
+      {
+        label: "حالة التحقق من الحساب",
+        value: user.verificationStatus?.isVerified
+          ? "تم التحقق"
+          : "لم يتم التحقق ",
         badge: true,
       },
       {
@@ -367,6 +374,24 @@ const User = () => {
                       }))
                     }
                   />
+                  <div>
+                    <label className="text-xs text-slate-500">
+                      حالة التحقق من الحساب
+                    </label>
+                    <select
+                      className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+                      value={formState.isVerified ? "true" : "false"}
+                      onChange={(event) =>
+                        setFormState((prev) => ({
+                          ...prev,
+                          isVerified: event.target.value === "true",
+                        }))
+                      }
+                    >
+                      <option value="true">تم التحقق</option>
+                      <option value="false">لم يتم التحقق</option>
+                    </select>
+                  </div>
                   <div>
                     <label className="text-xs text-slate-500">
                       حالة الحساب

@@ -9,7 +9,7 @@ export const getOne = async (req, res) => {
     const { id } = req.query;
 
     const profile = await User.findById(id).select(
-      "name phone balance isActive canBuy canSendCode createdAt updatedAt",
+      "name phone balance isActive canBuy canSendCode verificationStatus createdAt updatedAt",
     );
     if (!profile) {
       return res.status(404).json({ code: "USER_NOT_FOUND" });
