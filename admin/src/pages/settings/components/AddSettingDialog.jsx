@@ -31,7 +31,7 @@ const AddSettingDialog = ({ onAdded, onClose }) => {
     <div className="min-w-80 p-4 text-right" dir="rtl">
       <h2 className="text-lg font-semibold text-slate-800">إضافة إعداد جديد</h2>
       <p className="mt-1 text-sm text-slate-500">
-        أضف مفتاح، قيمة ووصفاً (اختياري).
+        أضف مفتاح، قيمة ووصفًا(اختياري).
       </p>
 
       <div className="mt-6 grid grid-cols-1 gap-4">

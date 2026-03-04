@@ -229,7 +229,7 @@ export const login = async (req, res) => {
 export const logout = async (req, res) => {
   return res.status(200).json({ success: true });
 };
-export const verifyAccountByCode = async (req, res) => {
+export const verifyAccount = async (req, res) => {
   try {
     const { phone, code } = req.body;
     if (!code || !phone) {

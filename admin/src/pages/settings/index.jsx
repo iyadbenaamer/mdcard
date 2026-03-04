@@ -210,7 +210,7 @@ const Settings = () => {
           </div>
         ) : settings.length === 0 ? (
           <div className="text-center py-20 text-gray-400">
-            لا توجد إعدادات حالياً
+            لا توجد إعدادات حاليًا
           </div>
         ) : (
           <div className="grid gap-5">

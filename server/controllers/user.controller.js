@@ -54,19 +54,12 @@ export const getAll = async (req, res) => {
 export const updateOne = async (req, res) => {
   try {
     const { id } = req.user;
-    let { name, password } = req.body;
+    let { password } = req.body;
     const user = await User.findById(id);
     if (!user) {
       return res.status(404).json({ code: "USER_NOT_FOUND" });
     }
 
-    if (name !== undefined) {
-      name = name?.trim();
-      if (!name) {
-        return res.status(400).json({ code: "USER_NAME_REQUIRED" });
-      }
-      user.name = name;
-    }
     if (password) {
       const salt = await bcrypt.genSalt();
       user.password = await bcrypt.hash(password, salt);

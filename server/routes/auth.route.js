@@ -9,7 +9,7 @@ import {
   sendVerificationCode,
   signup,
   verifyAccessToken,
-  verifyAccountByCode,
+  verifyAccount,
   verifyResetPasswordCode,
   verifyResetPasswordToken,
 } from "../controllers/auth.controller.js";
@@ -43,7 +43,7 @@ router.get("/verify_access", verifyToken, verifyAccessToken);
 router.post("/send_verification_code/", sendVerificationCode);
 
 //to verify the account by the verification code
-router.post("/verify_account", verifyAccountByCode);
+router.post("/verify_account", verifyAccount);
 
 //this route recieves the verification code and returns a token that entities the user to reset the password
 router.post("/verify_reset_password/", verifyResetPasswordCode);

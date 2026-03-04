@@ -43,7 +43,6 @@ at least once, therefore the loading effect won't be applied.
 const isLoaded = sessionStorage.getItem("isLoaded");
 
 root.render(
-  // <StrictMode>
   <Provider store={store}>
     <PersistGate loading={null} persistor={persistStore(store)}>
       <Suspense fallback={!isLoaded ? <Loading /> : null}>
@@ -51,5 +50,4 @@ root.render(
       </Suspense>
     </PersistGate>
   </Provider>,
-  // </StrictMode>,
 );

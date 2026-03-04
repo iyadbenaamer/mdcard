@@ -946,12 +946,12 @@ const CardTier = () => {
                             setDraftIsActive(event.target.checked)
                           }
                         />
-                        مفعًل
+                        مفعّل
                       </label>
                     ) : tier.isActive ? (
-                      "مفعًل"
+                      "مفعّل"
                     ) : (
-                      "غير مفعًل"
+                      "غير مفعّل"
                     )}
                   </TableCell>
                 </TableRow>
@@ -1019,9 +1019,10 @@ const CardTier = () => {
                         </TableCell>
                         <TableCell className="text-center">
                           <span
-                            className={`inline-flex rounded-full px-2 py-1 text-xs ${statusStyles[card.status] ??
+                            className={`inline-flex rounded-full px-2 py-1 text-xs ${
+                              statusStyles[card.status] ??
                               "bg-slate-100 text-slate-600"
-                              }`}
+                            }`}
                           >
                             {statusLabels[card.status] ?? "-"}
                           </span>
