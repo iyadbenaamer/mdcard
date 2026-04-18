@@ -72,8 +72,6 @@ export const content = {
     servicesPage: {
       title: "خدماتنا",
       carouselLabel: "عرض تفاعلي للخدمات",
-      prev: "السابق",
-      next: "التالي",
       slideAriaLabel: "شريحة",
       items: [
         {
@@ -183,8 +181,6 @@ export const content = {
     servicesPage: {
       title: "Services",
       carouselLabel: "Interactive Services Carousel",
-      prev: "Prev",
-      next: "Next",
       slideAriaLabel: "Slide",
       items: [
         {

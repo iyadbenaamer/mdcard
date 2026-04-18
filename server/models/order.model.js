@@ -8,6 +8,8 @@ const orderItemSchema = new Schema(
     title: { type: String, required: true },
     price: { type: Number, required: true, min: 0 },
     quantity: { type: Number, required: true, min: 1 },
+    provider: { type: String, enum: ["local", "bamboo"], default: "local" },
+    externalOrderId: { type: String, default: null },
     cards: [{ type: ObjectId, ref: "Card" }],
   },
   { _id: false },

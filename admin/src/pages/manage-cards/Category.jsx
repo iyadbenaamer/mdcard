@@ -174,7 +174,14 @@ const Category = () => {
   );
 
   const handleCreateType = useCallback(
-    async ({ name, image, printImage, redeemFormat, isActive }) => {
+    async ({
+      name,
+      image,
+      printImage,
+      redeemFormat,
+      isActive,
+      fulfillmentSource,
+    }) => {
       const trimmed = name.trim();
       if (!trimmed) {
         return { ok: false, error: "اسم نوع البطاقة مطلوب." };
@@ -188,6 +195,7 @@ const Category = () => {
         formData.append("categoryId", categoryId);
         formData.append("order", String(cardTypes.length + 1));
         formData.append("isActive", String(isActive));
+        formData.append("fulfillmentSource", fulfillmentSource);
         if (image) {
           formData.append("media", image);
         }
@@ -214,6 +222,7 @@ const Category = () => {
     const [printImage, setPrintImage] = useState(null);
     const [redeemFormat, setRedeemFormat] = useState("");
     const [isActive, setIsActive] = useState(true);
+    const [fulfillmentSource, setFulfillmentSource] = useState("local");
     const [dialogError, setDialogError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -247,6 +256,19 @@ const Category = () => {
             onChange={(e) => setRedeemFormat(e.target.value)}
             placeholder="مثال: استخدم الكود {code}"
           />
+          <label className="flex flex-col gap-2 text-sm text-slate-600">
+            <span>المصدر</span>
+            <select
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+              value={fulfillmentSource}
+              onChange={(event) => {
+                setFulfillmentSource(event.target.value);
+              }}
+            >
+              <option value="local">محلي</option>
+              <option value="bamboo">Bamboo</option>
+            </select>
+          </label>
           <ToggleSwitch
             label="مفعّل"
             checked={isActive}
@@ -277,6 +299,7 @@ const Category = () => {
                 printImage,
                 redeemFormat,
                 isActive,
+                fulfillmentSource,
               });
               if (result?.ok) {
                 onCancel();

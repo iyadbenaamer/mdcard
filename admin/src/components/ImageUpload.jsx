@@ -77,6 +77,7 @@ const ImageUpload = ({ value, onChange, existingUrl = "", label = "الصورة"
             <img
               src={previewSrc}
               alt="preview"
+              loading="lazy"
               className="h-full w-full object-contain"
             />
             {/* Clear new file (only when a new file is staged) */}

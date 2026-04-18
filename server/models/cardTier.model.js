@@ -9,6 +9,8 @@ const cardTierSchema = new Schema(
     title: { type: String, default: "", required: true, trim: true },
     buyPrice: { type: Number, required: true },
     sellPrice: { type: Number, required: true },
+    bambooProductId: { type: String, trim: true, default: "" },
+    value: { type: Number, default: null },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true },

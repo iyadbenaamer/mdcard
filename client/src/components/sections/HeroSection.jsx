@@ -42,6 +42,7 @@ function HeroSection({ t, language }) {
             <img
               src={appLogo}
               alt="MD Card"
+              loading="lazy"
               className="mx-auto h-14 w-auto lg:mx-0 sm:h-16"
             />
             <p className="mt-4 text-2xl font-extrabold text-brand-300">

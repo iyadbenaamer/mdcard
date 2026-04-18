@@ -24,7 +24,7 @@ const File = (props) => {
       </button>
       <div className="rounded-xl overflow-hidden border-2 aspect-square">
         {file.type.startsWith("image") ? (
-          <img className="max-w-full min-h-full" src={filePreview} />
+          <img className="max-w-full min-h-full" src={filePreview} loading="lazy" />
         ) : (
           <video className="max-w-full min-h-full bg-black" src={filePreview} />
         )}

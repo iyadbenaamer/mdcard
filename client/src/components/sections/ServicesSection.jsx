@@ -104,6 +104,7 @@ function ServicesSection({ t, language }) {
                         <img
                           src={slide.image}
                           alt={slide.title}
+                          loading="lazy"
                           className="w-full"
                         />
                       </div>

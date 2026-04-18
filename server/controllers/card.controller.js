@@ -9,6 +9,7 @@ import Transaction from "../models/transaction.model.js";
 import User from "../models/user.model.js";
 import Order from "../models/order.model.js";
 import CustomePricing from "../models/customePricing.model.js";
+import { placeAndResolveBambooOrder } from "../services/bambooCard.js";
 
 import { handleError } from "../utils/errorHandler.js";
 import parsePagination from "../utils/parsePagination.js";
@@ -70,6 +71,78 @@ const withDecryptedCode = (card) => {
   const data = card.toObject();
   data.code = decryptCardCode(data.code);
   return data;
+};
+
+const findDuplicateCodeInType = async (tierId, codeHash, excludeCardId) => {
+  const tier = await CardTier.findById(tierId).select("typeId");
+  if (!tier) {
+    return null;
+  }
+
+  const relatedTierIds = await CardTier.find({
+    typeId: tier.typeId,
+  }).select("_id");
+
+  return Card.findOne({
+    ...(excludeCardId ? { _id: { $ne: excludeCardId } } : {}),
+    tierId: { $in: relatedTierIds.map((item) => item._id) },
+    codeHash,
+  });
+};
+
+const createExternalCardDocument = async ({
+  tierId,
+  userId,
+  bambooCard,
+  bambooOrderId,
+}) => {
+  const code = bambooCard?.code?.trim();
+  if (!code) {
+    throw Object.assign(new Error("BAMBOO_CARD_CODE_MISSING"), {
+      code: "BAMBOO_CARD_CODE_MISSING",
+    });
+  }
+
+  const codeHash = hashCardCode(code);
+  const duplicate = await findDuplicateCodeInType(tierId, codeHash);
+  if (duplicate) {
+    throw Object.assign(new Error("CARD_CODE_DUPLICATE"), {
+      code: "CARD_CODE_DUPLICATE",
+    });
+  }
+
+  const externalSerialNumber = bambooCard?.serialNumber?.trim() || null;
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const card = new Card({
+      tierId,
+      serialNumber: generateRandomSerialNumber(),
+      code: encryptCardCode(code),
+      codeHash,
+      provider: "bamboo",
+      externalSerialNumber,
+      externalOrderId: bambooOrderId ?? null,
+      externalStatus: bambooCard?.status ?? null,
+      externalPayload: bambooCard?.raw ?? null,
+      status: "sold",
+      soldTo: userId,
+      soldAt: new Date(),
+    });
+
+    try {
+      await card.save();
+      return card;
+    } catch (err) {
+      if (err?.code === 11000) {
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw Object.assign(new Error("CARD_SERIAL_NUMBER_TAKEN"), {
+    code: "CARD_SERIAL_NUMBER_TAKEN",
+  });
 };
 
 export const getPaginated = async (req, res) => {
@@ -618,17 +691,24 @@ export const checkoutCart = async (req, res) => {
         return res.status(400).json({ code: "CARD_TIER_ID_INVALID" });
       }
 
-      const tier = await CardTier.findById(tierId);
+      const tier = await CardTier.findById(tierId).populate({
+        path: "typeId",
+        select: "fulfillmentSource name isActive",
+      });
       if (!tier || tier.isActive === false || tier.isAvailable === false) {
         availabilityResults.push({ tierId, requested, available: 0 });
         hasAvailabilityIssue = true;
         continue;
       }
 
-      const availableCount = await Card.countDocuments({
-        tierId,
-        status: "available",
-      });
+      const fulfillmentSource = tier.typeId?.fulfillmentSource || "local";
+      const availableCount =
+        fulfillmentSource === "bamboo"
+          ? requested
+          : await Card.countDocuments({
+              tierId,
+              status: "available",
+            });
 
       availabilityResults.push({
         tierId,
@@ -660,6 +740,9 @@ export const checkoutCart = async (req, res) => {
           tierTitle: tier.title,
           buyPrice,
           requested,
+          fulfillmentSource,
+          bambooProductId: tier.bambooProductId || "",
+          bambooValue: tier.value,
         });
       }
     }
@@ -683,33 +766,116 @@ export const checkoutCart = async (req, res) => {
     let currentBalance = user.balance;
     let partialFailure = false;
     const orderItems = [];
+    const failureDetails = [];
 
     for (const item of processList) {
       const fulfilledCards = [];
+      let externalOrderId = null;
 
-      for (let i = 0; i < item.requested; i++) {
-        const card = await Card.findOneAndUpdate(
-          { tierId: item.tierId, status: "available" },
-          {
-            status: "sold",
-            soldTo: user._id,
-            soldAt: new Date(),
-          },
-          { returnDocument: "after", sort: { createdAt: 1 } },
-        );
-
-        // If card was bought by someone else between our check and our update
-        if (!card) {
+      if (item.fulfillmentSource === "bamboo") {
+        if (!item.bambooProductId) {
           partialFailure = true;
-          break; // Stop buying this tier, move to next tier if any (rare edge case)
+          continue;
+        }
+        if (item.bambooValue === null || item.bambooValue === undefined || Number.isNaN(Number(item.bambooValue))) {
+          partialFailure = true;
+          continue;
         }
 
-        currentBalance -= item.buyPrice;
-        // Keep balance rounded to cents after each deduction to prevent accumulated FP error
-        currentBalance = roundToCents(currentBalance);
+        let bambooOrder;
+        try {
+          bambooOrder = await placeAndResolveBambooOrder({
+            productId: item.bambooProductId,
+            value: item.bambooValue,
+            quantity: item.requested,
+            reference: `${user._id}:${item.tierId}:${Date.now()}`,
+            metadata: {
+              userId: user._id.toString(),
+              tierId: item.tierId.toString(),
+              tierTitle: item.tierTitle,
+            },
+          });
+        } catch (err) {
+          if (err?.code === "BAMBOO_OUT_OF_STOCK") {
+            failureDetails.push({
+              tierId: item.tierId,
+              requested: item.requested,
+              available: Number(err.available ?? 0),
+              provider: "bamboo",
+              code: "BAMBOO_OUT_OF_STOCK",
+              message: err.providerMessage || null,
+            });
+          }
+          partialFailure = true;
+          continue;
+        }
 
-        fulfilledCards.push(card._id);
-        purchasedCards.push(withDecryptedCode(card));
+        externalOrderId = bambooOrder?.orderId || null;
+
+        const bambooCards = Array.isArray(bambooOrder?.cards) ? bambooOrder.cards : [];
+        if (bambooCards.length < item.requested) {
+          failureDetails.push({
+            tierId: item.tierId,
+            requested: item.requested,
+            available: bambooCards.length,
+            provider: "bamboo",
+            code: "BAMBOO_INCOMPLETE_ORDER",
+          });
+          partialFailure = true;
+          continue;
+        }
+
+        try {
+          for (let i = 0; i < item.requested; i += 1) {
+            const createdCard = await createExternalCardDocument({
+              tierId: item.tierId,
+              userId: user._id,
+              bambooCard: bambooCards[i],
+              bambooOrderId: bambooOrder.orderId,
+            });
+            fulfilledCards.push(createdCard._id);
+            purchasedCards.push(withDecryptedCode(createdCard));
+          }
+        } catch (err) {
+          failureDetails.push({
+            tierId: item.tierId,
+            requested: item.requested,
+            available: 0,
+            provider: "bamboo",
+            code: "BAMBOO_CARD_PERSIST_FAILED",
+          });
+          partialFailure = true;
+          continue;
+        }
+      } else {
+        for (let i = 0; i < item.requested; i++) {
+          const card = await Card.findOneAndUpdate(
+            { tierId: item.tierId, status: "available" },
+            {
+              status: "sold",
+              soldTo: user._id,
+              soldAt: new Date(),
+            },
+            { returnDocument: "after", sort: { createdAt: 1 } },
+          );
+
+          // If card was bought by someone else between our check and our update
+          if (!card) {
+            partialFailure = true;
+            break;
+          }
+
+          currentBalance -= item.buyPrice;
+          currentBalance = roundToCents(currentBalance);
+
+          fulfilledCards.push(card._id);
+          purchasedCards.push(withDecryptedCode(card));
+        }
+      }
+
+      if (item.fulfillmentSource === "bamboo" && fulfilledCards.length > 0) {
+        currentBalance -= item.buyPrice * fulfilledCards.length;
+        currentBalance = roundToCents(currentBalance);
       }
 
       if (fulfilledCards.length > 0) {
@@ -718,9 +884,18 @@ export const checkoutCart = async (req, res) => {
           title: item.tierTitle,
           price: item.buyPrice,
           quantity: fulfilledCards.length,
+          provider: item.fulfillmentSource,
+          externalOrderId,
           cards: fulfilledCards,
         });
       }
+    }
+
+    if (orderItems.length === 0 && partialFailure) {
+      return res.status(409).json({
+        code: "CART_AVAILABILITY_CHANGED",
+        details: failureDetails.length > 0 ? failureDetails : availabilityResults,
+      });
     }
 
     // 4. Update the user balance to reflect whatever was successfully charged
@@ -749,12 +924,12 @@ export const checkoutCart = async (req, res) => {
       });
       await transaction.save();
     }
-
     return res.status(201).json({
       cards: purchasedCards,
       order: savedOrder,
       balance: user.balance,
       partialFailure,
+      failedItems: failureDetails,
     });
   } catch (err) {
     return handleError(err, res);

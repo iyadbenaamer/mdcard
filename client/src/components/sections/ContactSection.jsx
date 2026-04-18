@@ -1,4 +1,4 @@
-import { CONTACT_LINKS } from "../../constants/contact";
+import { CONTACT_INFO, CONTACT_LINKS } from "../../constants/contact";
 
 import Icon from "../common/Icon";
 import appLogo from "../../assets/logo-white.png";
@@ -25,7 +25,9 @@ function ContactSection({ t }) {
               <span className="text-brand-700 dark:text-brand-300">
                 <Icon name="location" className="h-5 w-5" />
               </span>
-              <span>{t.contact.location}</span>
+              <a href={CONTACT_INFO.locationURL}>
+                <span>{t.contact.location}</span>
+              </a>
             </p>
             <p className="flex items-center gap-2">
               <span className="text-brand-700 dark:text-brand-300">
@@ -63,7 +65,12 @@ function ContactSection({ t }) {
         </div>
 
         <div className="card-soft bg-linear-to-br from-brand-600 to-brand-800 text-white dark:from-brand-700 dark:to-brand-950">
-          <img src={appLogo} alt="MD Card" className="h-12 w-auto" />
+          <img
+            src={appLogo}
+            alt="MD Card"
+            loading="lazy"
+            className="h-12 w-auto"
+          />
           <p className="mt-3 text-brand-50/95">{t.footer.short}</p>
           <div className="mt-8 grid grid-cols-3 gap-3 text-center"></div>
         </div>

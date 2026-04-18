@@ -25,6 +25,9 @@ const CardType = () => {
   const [cardTypeImage, setCardTypeImage] = useState("");
   const [cardTypePrintImage, setCardTypePrintImage] = useState("");
   const [cardTypeIsActive, setCardTypeIsActive] = useState(true);
+  const [cardTypeFulfillmentSource, setCardTypeFulfillmentSource] = useState(
+    "local",
+  );
   const [draftImageFile, setDraftImageFile] = useState(null);
   const [draftPrintImageFile, setDraftPrintImageFile] = useState(null);
   const [redeemFormat, setRedeemFormat] = useState("");
@@ -47,17 +50,11 @@ const CardType = () => {
       });
       const data = response.data ?? {};
       setCardTypeName(data.name ?? "");
-      // The aggregated query in getOne doesn't join category name directly in the root object
-      // but fetchTiers was getting it. Let's see if we can get it from here.
-      // Actually get_one controller does NOT seem to return categoryName in the root
-      // based on the aggregation pipeline I saw.
-      // The previous fetchTiers endpoint (GET /card-tiers) DID return categoryName.
-      // So I should keep categoryName coming from fetchTiers for now OR fetch category separately.
-      // Wait, let me check the controller again to be sure.
       setCardTypeImage(data.image ?? "");
       setCardTypePrintImage(data.printImage ?? "");
       setRedeemFormat(data.redeemFormat ?? "");
       setCardTypeIsActive(data.isActive ?? true);
+      setCardTypeFulfillmentSource(data.fulfillmentSource ?? "local");
 
       // Update breadcrumb if we have the name
       setLevels((prev) => {
@@ -197,6 +194,7 @@ const CardType = () => {
       formData.append("name", cardTypeName.trim());
       formData.append("isActive", String(cardTypeIsActive));
       formData.append("redeemFormat", (redeemFormat || "").trim());
+      formData.append("fulfillmentSource", cardTypeFulfillmentSource);
       if (draftImageFile) {
         formData.append("media", draftImageFile);
       }
@@ -224,7 +222,6 @@ const CardType = () => {
       setDraftPrintImageFile(null);
       setIsEditing(false);
       setSuccessMessage("تم حفظ التغييرات بنجاح.");
-      setSuccessMessage("تم حفظ التغييرات بنجاح.");
       await Promise.all([fetchTiers({ skipDraft: true }), fetchCardType()]);
     } catch (err) {
       setError("تعذر حفظ التغييرات. حاول مرة أخرى.");
@@ -234,12 +231,27 @@ const CardType = () => {
   };
 
   const handleCreateTier = useCallback(
-    async ({ title, buyPrice, sellPrice, isActive }) => {
+    async ({ title, buyPrice, sellPrice, bambooProductId, value, isActive }) => {
       if (!typeId) {
         return { ok: false, error: "تعذر تحديد نوع البطاقة." };
       }
       if (buyPrice === "" || sellPrice === "") {
         return { ok: false, error: "سعر الشراء والبيع مطلوبان." };
+      }
+      const nextBambooProductId = bambooProductId?.trim() ?? "";
+      const nextBambooValue =
+        value === "" || value === null || value === undefined ? "" : Number(value);
+      if (cardTypeFulfillmentSource === "bamboo") {
+        if (!nextBambooProductId) {
+          return { ok: false, error: "معرف منتج Bamboo مطلوب." };
+        }
+        if (
+          nextBambooValue === "" ||
+          Number.isNaN(nextBambooValue) ||
+          nextBambooValue <= 0
+        ) {
+          return { ok: false, error: "قيمة Bamboo مطلوبة." };
+        }
       }
       try {
         await axiosClient.post("/card-tiers", {
@@ -247,6 +259,10 @@ const CardType = () => {
           title: title?.trim() ?? "",
           buyPrice: Number(buyPrice),
           sellPrice: Number(sellPrice),
+          bambooProductId:
+            cardTypeFulfillmentSource === "bamboo" ? nextBambooProductId : "",
+          value:
+            cardTypeFulfillmentSource === "bamboo" ? nextBambooValue : null,
           isActive,
           order: tiers.length + 1,
         });
@@ -257,13 +273,15 @@ const CardType = () => {
         return { ok: false, error: "تعذر إنشاء فئة البطاقة. حاول مرة أخرى." };
       }
     },
-    [fetchTiers, tiers.length, typeId],
+    [cardTypeFulfillmentSource, fetchTiers, tiers.length, typeId],
   );
 
   const CreateTierDialog = ({ onCreate, onCancel }) => {
     const [title, setTitle] = useState("");
     const [buyPrice, setBuyPrice] = useState("");
     const [sellPrice, setSellPrice] = useState("");
+    const [bambooProductId, setBambooProductId] = useState("");
+    const [bambooValue, setBambooValue] = useState("");
     const [isActive, setIsActive] = useState(true);
     const [dialogError, setDialogError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -292,6 +310,23 @@ const CardType = () => {
             value={sellPrice}
             onChange={(event) => setSellPrice(event.target.value)}
           />
+          {cardTypeFulfillmentSource === "bamboo" && (
+            <>
+              <CustomInput
+                label="Bamboo Product ID"
+                value={bambooProductId}
+                onChange={(event) => setBambooProductId(event.target.value)}
+                placeholder="معرف المنتج في Bamboo"
+              />
+              <CustomInput
+                label="Bamboo Value"
+                type="number"
+                value={bambooValue}
+                onChange={(event) => setBambooValue(event.target.value)}
+                placeholder="قيمة الطلب في Bamboo"
+              />
+            </>
+          )}
           <label className="flex items-center gap-2 text-sm text-slate-600">
             <input
               type="checkbox"
@@ -324,6 +359,8 @@ const CardType = () => {
                 title,
                 buyPrice,
                 sellPrice,
+                bambooProductId,
+                value: bambooValue,
                 isActive,
               });
               if (result?.ok) {
@@ -402,6 +439,7 @@ const CardType = () => {
                     <img
                       src={cardTypeImage}
                       alt={cardTypeName}
+                      loading="lazy"
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                     />
                   ) : (
@@ -439,6 +477,7 @@ const CardType = () => {
                     <img
                       src={cardTypePrintImage}
                       alt={cardTypeName + " print"}
+                      loading="lazy"
                       className="h-24 w-full object-contain"
                     />
                   </div>
@@ -499,6 +538,30 @@ const CardType = () => {
                 ) : (
                   <div className="text-sm text-slate-700">
                     {redeemFormat || <span className="text-slate-400">-</span>}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-500">
+                  المصدر
+                </label>
+                {isEditing ? (
+                  <select
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                    value={cardTypeFulfillmentSource}
+                    onChange={(event) =>
+                      setCardTypeFulfillmentSource(event.target.value)
+                    }
+                  >
+                    <option value="local">محلي</option>
+                    <option value="bamboo">Bamboo</option>
+                  </select>
+                ) : (
+                  <div className="text-sm text-slate-700">
+                    {cardTypeFulfillmentSource === "bamboo"
+                      ? "Bamboo"
+                      : "محلي"}
                   </div>
                 )}
               </div>

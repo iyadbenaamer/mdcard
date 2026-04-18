@@ -8,11 +8,13 @@ function SiteFooter({ mdzoneLogo, footer }) {
             <img
               src={appLogo}
               alt="MD Card"
+              loading="lazy"
               className="h-10 w-auto rounded-md"
             />
             <img
               src={mdzoneLogo}
               alt="MD Zone"
+              loading="lazy"
               className="h-40 w-auto rounded-md"
             />
             <div></div>

@@ -24,6 +24,9 @@ const CardTier = () => {
   const cardTypeId = searchParams.get("cardTypeId");
   const [cardTierTitle, setCardTierTitle] = useState("");
   const [cardTypeName, setCardTypeName] = useState("");
+  const [cardTypeFulfillmentSource, setCardTypeFulfillmentSource] = useState(
+    "local",
+  );
   const [tier, setTier] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -43,6 +46,8 @@ const CardTier = () => {
   const [draftTitle, setDraftTitle] = useState("");
   const [draftBuyPrice, setDraftBuyPrice] = useState("");
   const [draftSellPrice, setDraftSellPrice] = useState("");
+  const [draftBambooProductId, setDraftBambooProductId] = useState("");
+  const [draftBambooValue, setDraftBambooValue] = useState("");
   const [draftIsActive, setDraftIsActive] = useState(true);
   const { openDialog, closeDialog } = useDialog();
   const { setLevels } = useBreadcrumb();
@@ -157,10 +162,16 @@ const CardTier = () => {
     setIsLoading(true);
     setError("");
     try {
-      const response = await axiosClient.get("/card-tiers", {
-        params: { typeId: cardTypeId },
-      });
-      const payload = response.data ?? {};
+      const [tiersResponse, typeResponse] = await Promise.all([
+        axiosClient.get("/card-tiers", {
+          params: { typeId: cardTypeId },
+        }),
+        axiosClient.get("/card-types/get_one", {
+          params: { id: cardTypeId },
+        }),
+      ]);
+      const payload = tiersResponse.data ?? {};
+      const typePayload = typeResponse.data ?? {};
       const list = Array.isArray(payload.tiers) ? payload.tiers : [];
       const found = list.find((item) => item._id === cardTierId);
       if (!found) {
@@ -169,7 +180,10 @@ const CardTier = () => {
       } else {
         setTier(found);
         setCardTierTitle(found.title ?? "");
-        setCardTypeName(payload.name ?? "");
+        setCardTypeName(typePayload.name ?? payload.name ?? "");
+        setCardTypeFulfillmentSource(
+          typePayload.fulfillmentSource ?? "local",
+        );
         setLevels([
           { key: "categories", label: "التصنيفات" },
           { key: "category", label: payload.categoryName ?? "تصنيف" },
@@ -180,6 +194,8 @@ const CardTier = () => {
           setDraftTitle(found.title ?? "");
           setDraftBuyPrice(found.buyPrice ?? "");
           setDraftSellPrice(found.sellPrice ?? "");
+          setDraftBambooProductId(found.bambooProductId ?? "");
+          setDraftBambooValue(found.value ?? "");
           setDraftIsActive(found.isActive ?? true);
         }
       }
@@ -273,12 +289,36 @@ const CardTier = () => {
   }, [cardTierId, setSearchParams]);
 
   const handleEditTier = useCallback(
-    async ({ title, buyPrice, sellPrice, isActive }) => {
+    async ({
+      title,
+      buyPrice,
+      sellPrice,
+      bambooProductId,
+      value,
+      isActive,
+    }) => {
       if (!cardTierId) {
         return { ok: false, error: "تعذر تحديد فئة البطاقة." };
       }
       if (buyPrice === "" || sellPrice === "") {
         return { ok: false, error: "سعر الشراء والبيع مطلوبان." };
+      }
+      const nextBambooProductId = bambooProductId?.trim() ?? "";
+      const nextBambooValue =
+        value === "" || value === null || value === undefined
+          ? ""
+          : Number(value);
+      if (cardTypeFulfillmentSource === "bamboo") {
+        if (!nextBambooProductId) {
+          return { ok: false, error: "معرف منتج Bamboo مطلوب." };
+        }
+        if (
+          nextBambooValue === "" ||
+          Number.isNaN(nextBambooValue) ||
+          nextBambooValue <= 0
+        ) {
+          return { ok: false, error: "قيمة Bamboo مطلوبة." };
+        }
       }
       try {
         await axiosClient.patch(
@@ -287,6 +327,12 @@ const CardTier = () => {
             title: title?.trim() ?? "",
             buyPrice: Number(buyPrice),
             sellPrice: Number(sellPrice),
+            bambooProductId:
+              cardTypeFulfillmentSource === "bamboo"
+                ? nextBambooProductId
+                : "",
+            value:
+              cardTypeFulfillmentSource === "bamboo" ? nextBambooValue : null,
             isActive,
           },
           { params: { id: cardTierId } },
@@ -297,7 +343,7 @@ const CardTier = () => {
         return { ok: false, error: "تعذر تعديل فئة البطاقة. حاول مرة أخرى." };
       }
     },
-    [cardTierId, fetchTier],
+    [cardTierId, cardTypeFulfillmentSource, fetchTier],
   );
 
   const DeleteTierDialog = ({ tierTitle, onDelete, onCancel }) => {
@@ -597,6 +643,8 @@ const CardTier = () => {
     setDraftTitle(tier.title ?? "");
     setDraftBuyPrice(tier.buyPrice ?? "");
     setDraftSellPrice(tier.sellPrice ?? "");
+    setDraftBambooProductId(tier.bambooProductId ?? "");
+    setDraftBambooValue(tier.value ?? "");
     setDraftIsActive(tier.isActive ?? true);
     setEditError("");
     setIsEditing(true);
@@ -607,6 +655,8 @@ const CardTier = () => {
       setDraftTitle(tier.title ?? "");
       setDraftBuyPrice(tier.buyPrice ?? "");
       setDraftSellPrice(tier.sellPrice ?? "");
+      setDraftBambooProductId(tier.bambooProductId ?? "");
+      setDraftBambooValue(tier.value ?? "");
       setDraftIsActive(tier.isActive ?? true);
     }
     setSuccessMessage("");
@@ -622,6 +672,8 @@ const CardTier = () => {
       title: draftTitle,
       buyPrice: draftBuyPrice,
       sellPrice: draftSellPrice,
+      bambooProductId: draftBambooProductId,
+      value: draftBambooValue,
       isActive: draftIsActive,
     });
     if (result?.ok) {
@@ -931,6 +983,45 @@ const CardTier = () => {
                     )}
                   </TableCell>
                 </TableRow>
+                {cardTypeFulfillmentSource === "bamboo" && (
+                  <>
+                    <TableRow>
+                      <TableCell className="font-medium text-slate-600">
+                        Bamboo Product ID
+                      </TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <CustomInput
+                            value={draftBambooProductId}
+                            onChange={(event) =>
+                              setDraftBambooProductId(event.target.value)
+                            }
+                          />
+                        ) : (
+                          tier.bambooProductId || "-"
+                        )}
+                      </TableCell>
+                    </TableRow>
+                    <TableRow>
+                      <TableCell className="font-medium text-slate-600">
+                        Bamboo Value
+                      </TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <CustomInput
+                            type="number"
+                            value={draftBambooValue}
+                            onChange={(event) =>
+                              setDraftBambooValue(event.target.value)
+                            }
+                          />
+                        ) : (
+                          tier.value ?? "-"
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  </>
+                )}
                 <TableRow>
                   <TableCell className="font-medium text-slate-600">
                     الحالة

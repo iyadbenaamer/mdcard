@@ -9,6 +9,9 @@ const getEncryptionKey = () => {
 };
 
 export const encryptCardCode = (plainText) => {
+  if (plainText === undefined || plainText === null || plainText === "") {
+    throw new Error("CARD_CODE_REQUIRED");
+  }
   const key = getEncryptionKey();
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);

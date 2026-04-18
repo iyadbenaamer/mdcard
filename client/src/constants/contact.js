@@ -2,6 +2,7 @@ export const CONTACT_INFO = {
   facebook:
     "https://www.facebook.com/profile.php?id=61576548257904&mibextid=ZbWKwL",
   instagram: "https://www.instagram.com/mdzone03?igsh=MTZ0MDUycm9zcmdnbg%3D%3D",
+  locationURL: "https://maps.google.com/",
   email: "info@mdcard.com.ly",
   whatsappNumber: "0925767732",
   phoneNumber: "0925767732",

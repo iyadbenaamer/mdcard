@@ -26,6 +26,7 @@ const PreloadedImage = ({
     <img
       src={loadedSrc}
       alt={alt}
+      loading="lazy"
       width={width}
       height={height}
       className={`object-cover circle transition-opacity duration-200 ease-in ${className}`}

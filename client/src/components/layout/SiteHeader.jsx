@@ -20,6 +20,7 @@ function SiteHeader({
           <img
             src={isDark ? logoDark : logoLight}
             alt="MD Card"
+            loading="lazy"
             className="h-9 w-auto sm:h-10"
           />
         </a>

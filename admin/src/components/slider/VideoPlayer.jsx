@@ -77,6 +77,7 @@ const VideoPlayer = ({ url, active }) => {
         <img
           src={poster}
           alt="video preview"
+          loading="lazy"
           className="absolute inset-0 w-full h-full object-cover"
           draggable={false}
         />

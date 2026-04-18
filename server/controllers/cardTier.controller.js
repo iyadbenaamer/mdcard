@@ -92,7 +92,16 @@ export const getPaginated = async (req, res) => {
 
 export const createOne = async (req, res) => {
   try {
-    const { typeId, title, buyPrice, sellPrice, isActive, order } = req.body;
+    const {
+      typeId,
+      title,
+      buyPrice,
+      sellPrice,
+      bambooProductId,
+      value,
+      isActive,
+      order,
+    } = req.body;
 
     if (!typeId || buyPrice === undefined || sellPrice === undefined) {
       return res
@@ -103,6 +112,19 @@ export const createOne = async (req, res) => {
     const cardType = await CardType.findById(typeId);
     if (!cardType) {
       return res.status(404).json({ code: "CARD_TYPE_NOT_FOUND" });
+    }
+
+    const nextBambooProductId = bambooProductId?.trim() ?? "";
+    const nextBambooValue = value === undefined || value === null || value === ""
+      ? null
+      : Number(value);
+    if (cardType.fulfillmentSource === "bamboo") {
+      if (!nextBambooProductId) {
+        return res.status(400).json({ code: "CARD_TIER_BAMBOO_PRODUCT_ID_REQUIRED" });
+      }
+      if (nextBambooValue === null || Number.isNaN(nextBambooValue) || nextBambooValue <= 0) {
+        return res.status(400).json({ code: "CARD_TIER_BAMBOO_VALUE_REQUIRED" });
+      }
     }
 
     let nextOrder;
@@ -129,6 +151,8 @@ export const createOne = async (req, res) => {
       title,
       buyPrice,
       sellPrice,
+      bambooProductId: cardType.fulfillmentSource === "bamboo" ? nextBambooProductId : "",
+      value: cardType.fulfillmentSource === "bamboo" ? nextBambooValue : null,
       isActive:
         typeof normalizedIsActive === "boolean"
           ? normalizedIsActive
@@ -145,7 +169,7 @@ export const createOne = async (req, res) => {
 export const updateOne = async (req, res) => {
   try {
     const { id } = req.query;
-    const { typeId, title, buyPrice, sellPrice, isActive } = req.body;
+    const { typeId, title, buyPrice, sellPrice, bambooProductId, value, isActive } = req.body;
 
     const tier = await CardTier.findById(id);
     if (!tier) {
@@ -158,6 +182,25 @@ export const updateOne = async (req, res) => {
         return res.status(404).json({ code: "CARD_TYPE_NOT_FOUND" });
       }
       tier.typeId = typeId;
+    }
+
+    const targetType = await CardType.findById(typeId ?? tier.typeId);
+    const nextBambooProductId = bambooProductId?.trim() ?? tier.bambooProductId ?? "";
+    const nextBambooValue = value === undefined || value === null || value === ""
+      ? tier.value ?? null
+      : Number(value);
+    if (targetType?.fulfillmentSource === "bamboo") {
+      if (!nextBambooProductId) {
+        return res.status(400).json({ code: "CARD_TIER_BAMBOO_PRODUCT_ID_REQUIRED" });
+      }
+      if (nextBambooValue === null || Number.isNaN(nextBambooValue) || nextBambooValue <= 0) {
+        return res.status(400).json({ code: "CARD_TIER_BAMBOO_VALUE_REQUIRED" });
+      }
+      tier.bambooProductId = nextBambooProductId;
+      tier.value = nextBambooValue;
+    } else {
+      tier.bambooProductId = "";
+      tier.value = null;
     }
 
     if (title !== undefined) {
@@ -214,10 +257,21 @@ export const checkAvailability = async (req, res) => {
     const results = await Promise.all(
       items.map(async ({ tierId, quantity }) => {
         const requested = Math.max(1, Number(quantity) || 1);
-        const available = await Card.countDocuments({
-          tierId,
-          status: "available",
+        const tier = await CardTier.findById(tierId).populate({
+          path: "typeId",
+          select: "fulfillmentSource isActive",
         });
+        if (!tier || tier.isActive === false || tier.isAvailable === false) {
+          return { tierId, requested, available: 0 };
+        }
+
+        const available =
+          tier.typeId?.fulfillmentSource === "bamboo"
+            ? requested
+            : await Card.countDocuments({
+                tierId,
+                status: "available",
+              });
         return { tierId, requested, available: Math.min(requested, available) };
       }),
     );

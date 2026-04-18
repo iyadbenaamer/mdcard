@@ -10,6 +10,9 @@ import { safeDelete } from "../middleware/media.middleware.js";
 import { handleError } from "../utils/errorHandler.js";
 import parsePagination from "../utils/parsePagination.js";
 
+const normalizeFulfillmentSource = (value) =>
+  value === "bamboo" ? "bamboo" : "local";
+
 export const getPaginated = async (req, res) => {
   try {
     const { isActive } = req.query;
@@ -212,7 +215,7 @@ export const getOne = async (req, res) => {
       {
         $lookup: {
           from: "cards",
-          let: { tierId: "$_id" },
+          let: { tierId: "$_id", fulfillmentSource: "$$fulfillmentSource" },
           pipeline: [
             {
               $match: {
@@ -231,7 +234,13 @@ export const getOne = async (req, res) => {
       },
       {
         $addFields: {
-          isAvailable: { $gt: [{ $size: "$availableCards" }, 0] },
+          isAvailable: {
+            $cond: [
+              { $eq: ["$$fulfillmentSource", "bamboo"] },
+              true,
+              { $gt: [{ $size: "$availableCards" }, 0] },
+            ],
+          },
         },
       },
       { $unset: "availableCards" },
@@ -243,7 +252,7 @@ export const getOne = async (req, res) => {
       {
         $lookup: {
           from: "card_tiers",
-          let: { typeId: "$_id" },
+          let: { typeId: "$_id", fulfillmentSource: "$fulfillmentSource" },
           pipeline: tierPipeline,
           as: "tiers",
         },
@@ -262,7 +271,13 @@ export const getOne = async (req, res) => {
 
 export const createOne = async (req, res) => {
   try {
-    let { name, isActive, categoryId, order } = req.body;
+    let {
+      name,
+      isActive,
+      categoryId,
+      order,
+      fulfillmentSource,
+    } = req.body;
     const image = req.filePath;
     const printImage = req.printFilePath ?? req.body.printImage;
     const redeemFormat = req.body.redeemFormat?.trim();
@@ -279,6 +294,8 @@ export const createOne = async (req, res) => {
     if (!cardCategory) {
       return res.status(404).json({ code: "CARD_CATEGORY_NOT_FOUND" });
     }
+
+    const nextFulfillmentSource = normalizeFulfillmentSource(fulfillmentSource);
 
     let nextOrder;
     if (order !== undefined) {
@@ -301,6 +318,7 @@ export const createOne = async (req, res) => {
     const cardType = new CardType({
       categoryId,
       name,
+      fulfillmentSource: nextFulfillmentSource,
       image,
       printImage,
       redeemFormat,
@@ -321,7 +339,11 @@ export const createOne = async (req, res) => {
 export const updateOne = async (req, res) => {
   try {
     const { id } = req.query;
-    let { name, isActive } = req.body;
+    let {
+      name,
+      isActive,
+      fulfillmentSource,
+    } = req.body;
     const image = req.filePath ?? req.body.image;
     const printImage = req.printFilePath ?? req.body.printImage;
     const redeemFormat = req.body.redeemFormat;
@@ -337,6 +359,11 @@ export const updateOne = async (req, res) => {
         return res.status(400).json({ code: "CARD_TYPE_NAME_REQUIRED" });
       }
       cardType.name = name;
+    }
+
+    if (fulfillmentSource !== undefined) {
+      const nextFulfillmentSource = normalizeFulfillmentSource(fulfillmentSource);
+      cardType.fulfillmentSource = nextFulfillmentSource;
     }
 
     if (image !== undefined) {

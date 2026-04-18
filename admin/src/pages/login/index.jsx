@@ -17,7 +17,7 @@ const Login = () => {
         </div>
       </div>
       <div className="hidden lg:flex flex-1 items-center justify-center ">
-        <img src={LandingPic} alt="Landing" />
+        <img src={LandingPic} alt="Landing" loading="lazy" />
       </div>
     </div>
   );

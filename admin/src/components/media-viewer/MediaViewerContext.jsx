@@ -124,6 +124,7 @@ const MediaViewerOverlay = () => {
           <img
             src={file.path}
             alt={"media " + (index + 1)}
+            loading="lazy"
             className="max-w-full max-h-[85vh] object-contain rounded shadow-lg"
             draggable={false}
           />
