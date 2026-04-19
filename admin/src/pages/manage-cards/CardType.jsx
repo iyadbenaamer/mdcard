@@ -4,6 +4,7 @@ import { useSearchParams } from "react-router-dom";
 import CustomInput from "components/CustomInput";
 import PrimaryBtn from "components/PrimaryBtn";
 import SubmitBtn from "components/SubmitBtn";
+import RedBtn from "components/RedBtn";
 import ToggleSwitch from "components/ToggleSwitch";
 import ImageUpload from "components/ImageUpload";
 import {
@@ -22,6 +23,9 @@ const CardType = () => {
   const typeId = searchParams.get("cardTypeId");
   const [cardTypeName, setCardTypeName] = useState("");
   const [categoryName, setCategoryName] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [draftCategoryId, setDraftCategoryId] = useState("");
+  const [categories, setCategories] = useState([]);
   const [cardTypeImage, setCardTypeImage] = useState("");
   const [cardTypePrintImage, setCardTypePrintImage] = useState("");
   const [cardTypeIsActive, setCardTypeIsActive] = useState(true);
@@ -39,6 +43,7 @@ const CardType = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [deleteTypeId, setDeleteTypeId] = useState(null);
   const { openDialog, closeDialog } = useDialog();
   const { setLevels } = useBreadcrumb();
 
@@ -50,6 +55,8 @@ const CardType = () => {
       });
       const data = response.data ?? {};
       setCardTypeName(data.name ?? "");
+      setCategoryId(data.categoryId ?? "");
+      setDraftCategoryId(data.categoryId ?? "");
       setCardTypeImage(data.image ?? "");
       setCardTypePrintImage(data.printImage ?? "");
       setRedeemFormat(data.redeemFormat ?? "");
@@ -70,6 +77,15 @@ const CardType = () => {
       setError("تعذر تحميل تفاصيل نوع البطاقة.");
     }
   }, [typeId, setLevels]);
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const response = await axiosClient.get("/card-categories");
+      setCategories(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      setCategories([]);
+    }
+  }, []);
 
   const fetchTiers = useCallback(
     async (options = {}) => {
@@ -118,8 +134,19 @@ const CardType = () => {
 
   useEffect(() => {
     fetchCardType();
+    fetchCategories();
     fetchTiers();
-  }, [fetchCardType, fetchTiers]);
+  }, [fetchCardType, fetchCategories, fetchTiers]);
+
+  useEffect(() => {
+    if (!categoryId) {
+      setCategoryName("");
+      return;
+    }
+    setCategoryName(
+      categories.find((item) => item._id === categoryId)?.name ?? "",
+    );
+  }, [categoryId, categories]);
 
   useEffect(() => {
     if (!isEditing) {
@@ -144,6 +171,7 @@ const CardType = () => {
 
   const handleEditStart = () => {
     setDraftTiers(tiers);
+    setDraftCategoryId(categoryId);
     setDraftImageFile(null);
     setDraftPrintImageFile(null);
     setIsEditing(true);
@@ -153,6 +181,7 @@ const CardType = () => {
 
   const handleCancel = () => {
     setDraftTiers(tiers);
+    setDraftCategoryId(categoryId);
     setDraftImageFile(null);
     setDraftPrintImageFile(null);
     setIsEditing(false);
@@ -192,6 +221,7 @@ const CardType = () => {
       // Update card type fields (name, image, isActive)
       const formData = new FormData();
       formData.append("name", cardTypeName.trim());
+      formData.append("categoryId", draftCategoryId || categoryId);
       formData.append("isActive", String(cardTypeIsActive));
       formData.append("redeemFormat", (redeemFormat || "").trim());
       formData.append("fulfillmentSource", cardTypeFulfillmentSource);
@@ -385,6 +415,85 @@ const CardType = () => {
     );
   };
 
+  const handleDeleteType = useCallback(async () => {
+    if (!typeId) {
+      return { ok: false, error: "تعذر تحديد نوع البطاقة." };
+    }
+    setDeleteTypeId(typeId);
+    setError("");
+    setSuccessMessage("");
+    try {
+      await axiosClient.delete("/card-types", {
+        params: { id: typeId },
+      });
+      setSearchParams((prev) => {
+        prev.delete("cardTypeId");
+        return prev;
+      });
+      return { ok: true };
+    } catch (err) {
+      const code = err?.response?.data?.code;
+      if (code === "CARD_TYPE_HAS_TIERS") {
+        return {
+          ok: false,
+          error: "لا يمكن حذف نوع البطاقة طالما يحتوي على فئات بطاقات.",
+        };
+      }
+      return { ok: false, error: "تعذر حذف نوع البطاقة. حاول مرة أخرى." };
+    } finally {
+      setDeleteTypeId(null);
+    }
+  }, [setSearchParams, typeId]);
+
+  const DeleteTypeDialog = ({ typeName, onDelete, onCancel }) => {
+    const [dialogError, setDialogError] = useState("");
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    return (
+      <div className="min-w-70 p-2">
+        <h2 className="text-base font-semibold text-slate-800">
+          تأكيد حذف نوع البطاقة
+        </h2>
+        <p className="mt-2 text-sm text-slate-600">
+          سيتم حذف نوع البطاقة
+          <span className="font-semibold text-slate-800"> {typeName}</span>.
+          هل تريد المتابعة؟
+        </p>
+        {dialogError && (
+          <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">
+            {dialogError}
+          </div>
+        )}
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+            onClick={onCancel}
+            disabled={isSubmitting}
+          >
+            إلغاء
+          </button>
+          <RedBtn
+            onClick={async () => {
+              setIsSubmitting(true);
+              setDialogError("");
+              const result = await onDelete();
+              if (result?.ok) {
+                onCancel();
+              } else if (result?.error) {
+                setDialogError(result.error);
+              }
+              setIsSubmitting(false);
+            }}
+            disabled={isSubmitting}
+          >
+            حذف
+          </RedBtn>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="px-4 py-6" dir="rtl">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -412,6 +521,19 @@ const CardType = () => {
           </div>
         ) : (
           <div className="flex items-center gap-2">
+            <RedBtn
+              onClick={() => {
+                openDialog(
+                  <DeleteTypeDialog
+                    typeName={cardTypeName}
+                    onDelete={handleDeleteType}
+                    onCancel={closeDialog}
+                  />,
+                );
+              }}
+              disabled={deleteTypeId === typeId}
+            >
+              حذف             </RedBtn>
             <PrimaryBtn onClick={handleOpenCreateDialog}>
               إنشاء فئة بطاقة جديدة
             </PrimaryBtn>
@@ -493,11 +615,22 @@ const CardType = () => {
                   التصنيف
                 </label>
                 {isEditing ? (
-                  <CustomInput
-                    value={categoryName}
-                    onChange={(e) => setCategoryName(e.target.value)}
-                    disabled
-                  />
+                  <select
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700"
+                    value={draftCategoryId}
+                    onChange={(event) => {
+                      setDraftCategoryId(event.target.value);
+                    }}
+                  >
+                    <option value="" disabled>
+                      اختر التصنيف
+                    </option>
+                    {categories.map((category) => (
+                      <option key={category._id} value={category._id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
                 ) : (
                   <div className="text-lg font-medium text-slate-700">
                     {categoryName || <span className="text-slate-400">-</span>}

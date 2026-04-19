@@ -341,6 +341,7 @@ export const updateOne = async (req, res) => {
     const { id } = req.query;
     let {
       name,
+      categoryId,
       isActive,
       fulfillmentSource,
     } = req.body;
@@ -359,6 +360,19 @@ export const updateOne = async (req, res) => {
         return res.status(400).json({ code: "CARD_TYPE_NAME_REQUIRED" });
       }
       cardType.name = name;
+    }
+
+    if (categoryId !== undefined) {
+      if (!mongoose.Types.ObjectId.isValid(categoryId)) {
+        return res.status(400).json({ code: "CARD_CATEGORY_ID_INVALID" });
+      }
+
+      const cardCategory = await CardCategory.findById(categoryId);
+      if (!cardCategory) {
+        return res.status(404).json({ code: "CARD_CATEGORY_NOT_FOUND" });
+      }
+
+      cardType.categoryId = categoryId;
     }
 
     if (fulfillmentSource !== undefined) {
