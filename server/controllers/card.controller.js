@@ -760,25 +760,94 @@ export const checkoutCart = async (req, res) => {
       return res.status(400).json({ code: "USER_BALANCE_INSUFFICIENT" });
     }
 
-    // 3. Process exactly as requested, sequentially updating cards and saving transactions
+    // 3. Process exactly as requested; cancel the whole checkout if any tier cannot be fulfilled
     const purchasedCards = [];
     const balanceBeforeWholeOrder = user.balance;
     let currentBalance = user.balance;
-    let partialFailure = false;
     const orderItems = [];
     const failureDetails = [];
+    const soldExistingCardIds = [];
+    const createdExternalCardIds = [];
+    let checkoutFailed = false;
 
     for (const item of processList) {
+      if (checkoutFailed) {
+        break;
+      }
+
       const fulfilledCards = [];
       let externalOrderId = null;
 
       if (item.fulfillmentSource === "bamboo") {
-        if (!item.bambooProductId) {
-          partialFailure = true;
+        // First consume unsold bamboo cards already stored locally.
+        const localBambooCandidates = await Card.find({
+          tierId: item.tierId,
+          status: "available",
+        })
+          .sort({ createdAt: 1, _id: 1 })
+          .limit(item.requested);
+
+        for (const candidate of localBambooCandidates) {
+          const localBambooCard = await Card.findOneAndUpdate(
+            { _id: candidate._id, status: "available" },
+            {
+              status: "sold",
+              soldTo: user._id,
+              soldAt: new Date(),
+            },
+            { returnDocument: "after" },
+          );
+
+          if (!localBambooCard) {
+            continue;
+          }
+
+          currentBalance -= item.buyPrice;
+          currentBalance = roundToCents(currentBalance);
+
+          fulfilledCards.push(localBambooCard._id);
+          soldExistingCardIds.push(localBambooCard._id);
+          purchasedCards.push(withDecryptedCode(localBambooCard));
+        }
+
+        const remainingQuantity = item.requested - fulfilledCards.length;
+        if (remainingQuantity <= 0) {
+          orderItems.push({
+            tierId: item.tierId,
+            title: item.tierTitle,
+            price: item.buyPrice,
+            quantity: fulfilledCards.length,
+            provider: item.fulfillmentSource,
+            externalOrderId,
+            cards: fulfilledCards,
+          });
           continue;
         }
-        if (item.bambooValue === null || item.bambooValue === undefined || Number.isNaN(Number(item.bambooValue))) {
-          partialFailure = true;
+
+        if (!item.bambooProductId) {
+          failureDetails.push({
+            tierId: item.tierId,
+            requested: item.requested,
+            available: fulfilledCards.length,
+            provider: "bamboo",
+            code: "BAMBOO_PRODUCT_NOT_CONFIGURED",
+          });
+          checkoutFailed = true;
+          continue;
+        }
+        if (
+          item.bambooValue === null ||
+          item.bambooValue === undefined ||
+          Number.isNaN(Number(item.bambooValue))
+        ) {
+          failureDetails.push({
+            tierId: item.tierId,
+            requested: item.requested,
+            available: fulfilledCards.length,
+            provider: "bamboo",
+            code: "BAMBOO_VALUE_NOT_CONFIGURED",
+          });
+          checkoutFailed = true;
           continue;
         }
 
@@ -787,7 +856,7 @@ export const checkoutCart = async (req, res) => {
           bambooOrder = await placeAndResolveBambooOrder({
             productId: item.bambooProductId,
             value: item.bambooValue,
-            quantity: item.requested,
+            quantity: remainingQuantity,
             reference: `${user._id}:${item.tierId}:${Date.now()}`,
             metadata: {
               userId: user._id.toString(),
@@ -806,45 +875,50 @@ export const checkoutCart = async (req, res) => {
               message: err.providerMessage || null,
             });
           }
-          partialFailure = true;
+          checkoutFailed = true;
           continue;
         }
 
         externalOrderId = bambooOrder?.orderId || null;
 
         const bambooCards = Array.isArray(bambooOrder?.cards) ? bambooOrder.cards : [];
-        if (bambooCards.length < item.requested) {
+        if (bambooCards.length < remainingQuantity) {
           failureDetails.push({
             tierId: item.tierId,
             requested: item.requested,
-            available: bambooCards.length,
+            available: fulfilledCards.length + bambooCards.length,
             provider: "bamboo",
             code: "BAMBOO_INCOMPLETE_ORDER",
           });
-          partialFailure = true;
+          checkoutFailed = true;
           continue;
         }
 
         try {
-          for (let i = 0; i < item.requested; i += 1) {
+          for (let i = 0; i < remainingQuantity; i += 1) {
             const createdCard = await createExternalCardDocument({
               tierId: item.tierId,
               userId: user._id,
               bambooCard: bambooCards[i],
               bambooOrderId: bambooOrder.orderId,
             });
+
+            currentBalance -= item.buyPrice;
+            currentBalance = roundToCents(currentBalance);
+
             fulfilledCards.push(createdCard._id);
+            createdExternalCardIds.push(createdCard._id);
             purchasedCards.push(withDecryptedCode(createdCard));
           }
         } catch (err) {
           failureDetails.push({
             tierId: item.tierId,
             requested: item.requested,
-            available: 0,
+            available: fulfilledCards.length,
             provider: "bamboo",
             code: "BAMBOO_CARD_PERSIST_FAILED",
           });
-          partialFailure = true;
+          checkoutFailed = true;
           continue;
         }
       } else {
@@ -861,7 +935,14 @@ export const checkoutCart = async (req, res) => {
 
           // If card was bought by someone else between our check and our update
           if (!card) {
-            partialFailure = true;
+            failureDetails.push({
+              tierId: item.tierId,
+              requested: item.requested,
+              available: fulfilledCards.length,
+              provider: "local",
+              code: "LOCAL_STOCK_CHANGED",
+            });
+            checkoutFailed = true;
             break;
           }
 
@@ -869,13 +950,9 @@ export const checkoutCart = async (req, res) => {
           currentBalance = roundToCents(currentBalance);
 
           fulfilledCards.push(card._id);
+          soldExistingCardIds.push(card._id);
           purchasedCards.push(withDecryptedCode(card));
         }
-      }
-
-      if (item.fulfillmentSource === "bamboo" && fulfilledCards.length > 0) {
-        currentBalance -= item.buyPrice * fulfilledCards.length;
-        currentBalance = roundToCents(currentBalance);
       }
 
       if (fulfilledCards.length > 0) {
@@ -891,7 +968,25 @@ export const checkoutCart = async (req, res) => {
       }
     }
 
-    if (orderItems.length === 0 && partialFailure) {
+    if (checkoutFailed) {
+      await Promise.allSettled([
+        soldExistingCardIds.length
+          ? Card.updateMany(
+              { _id: { $in: soldExistingCardIds } },
+              {
+                $set: {
+                  status: "available",
+                  soldTo: null,
+                  soldAt: null,
+                },
+              },
+            )
+          : Promise.resolve(),
+        createdExternalCardIds.length
+          ? Card.deleteMany({ _id: { $in: createdExternalCardIds } })
+          : Promise.resolve(),
+      ]);
+
       return res.status(409).json({
         code: "CART_AVAILABILITY_CHANGED",
         details: failureDetails.length > 0 ? failureDetails : availabilityResults,
@@ -928,8 +1023,8 @@ export const checkoutCart = async (req, res) => {
       cards: purchasedCards,
       order: savedOrder,
       balance: user.balance,
-      partialFailure,
-      failedItems: failureDetails,
+      partialFailure: false,
+      failedItems: [],
     });
   } catch (err) {
     return handleError(err, res);
