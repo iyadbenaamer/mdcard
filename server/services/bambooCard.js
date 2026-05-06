@@ -87,7 +87,11 @@ const unwrapCandidates = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload.accounts)) return payload.accounts;
   if (Array.isArray(payload.cards)) return payload.cards;
-  if (Array.isArray(payload.items)) return payload.items;
+  if (Array.isArray(payload.items)) {
+    return payload.items.flatMap((item) =>
+      Array.isArray(item?.cards) ? item.cards : [item],
+    );
+  }
   if (Array.isArray(payload.products)) return payload.products;
   if (Array.isArray(payload.data)) return payload.data;
   if (Array.isArray(payload.results)) return payload.results;
@@ -132,14 +136,15 @@ const normalizeAccountList = (payload) =>
 const normalizeCard = (entry) => {
   if (!entry || typeof entry !== "object") return null;
 
-  const nested = entry.card && typeof entry.card === "object" ? entry.card : entry;
+  const nested =
+    entry.card && typeof entry.card === "object" ? entry.card : entry;
   const code = pickFirst(nested, [
     "code",
-    "pin",
+    "cardCode",
     "voucherCode",
     "redemptionCode",
-    "cardCode",
     "secret",
+    "pin",
   ]);
   const serialNumber = pickFirst(nested, [
     "serialNumber",
@@ -153,7 +158,8 @@ const normalizeCard = (entry) => {
   return {
     code: code === undefined ? null : String(code),
     serialNumber: serialNumber === undefined ? null : String(serialNumber),
-    externalCardId: externalCardId === undefined ? null : String(externalCardId),
+    externalCardId:
+      externalCardId === undefined ? null : String(externalCardId),
     status: pickFirst(nested, ["status", "state"]) ?? null,
     raw: nested,
   };
@@ -163,29 +169,37 @@ const normalizeOrderData = (payload) => {
   if (typeof payload === "string") {
     return {
       orderId: payload,
+      requestId: payload,
       status: null,
       cards: [],
       raw: payload,
     };
   }
 
-  const order = payload?.order && typeof payload.order === "object" ? payload.order : payload;
-  const orderId = pickFirst(order, [
+  const order =
+    payload?.order && typeof payload.order === "object"
+      ? payload.order
+      : payload;
+  const requestId = pickFirst(order, [
     "requestId",
-    "orderId",
-    "orderID",
+    "requestID",
     "id",
     "reference",
     "referenceNumber",
-    "orderNumber",
   ]);
+  const orderId = pickFirst(order, ["orderId", "orderID", "orderNumber"]);
 
-  const cards = unwrapCandidates(payload)
-    .map(normalizeCard)
-    .filter(Boolean);
+  const cards = unwrapCandidates(payload).map(normalizeCard).filter(Boolean);
 
   return {
-    orderId: orderId === undefined ? null : String(orderId),
+    orderId:
+      requestId !== undefined && requestId !== null
+        ? String(requestId)
+        : orderId === undefined
+          ? null
+          : String(orderId),
+    requestId: requestId === undefined ? null : String(requestId),
+    providerOrderId: orderId === undefined ? null : String(orderId),
     status: pickFirst(order, ["status", "state", "orderStatus"]) ?? null,
     cards,
     raw: payload,
@@ -205,13 +219,18 @@ const toBambooStockError = (error) => {
   }
 
   const normalizedMessage = message.toLowerCase();
-  if (!normalizedMessage.includes("not enough") || !normalizedMessage.includes("in stock")) {
+  if (
+    !normalizedMessage.includes("not enough") ||
+    !normalizedMessage.includes("in stock")
+  ) {
     return null;
   }
 
   const requestedMatch = message.match(/requested\s*:\s*(\d+)/i);
   const inStockMatch = message.match(/in\s*stock\s*:\s*(\d+)/i);
-  const productMatch = message.match(/for\s+product\s+(.+?)\.\s*requested\s*:/i);
+  const productMatch = message.match(
+    /for\s+product\s+(.+?)\.\s*requested\s*:/i,
+  );
 
   const transformed = new Error("BAMBOO_OUT_OF_STOCK");
   transformed.code = "BAMBOO_OUT_OF_STOCK";
@@ -220,7 +239,8 @@ const toBambooStockError = (error) => {
   transformed.available = inStockMatch ? Number(inStockMatch[1]) : 0;
   transformed.providerMessage = message;
   transformed.status = status;
-  transformed.correlationId = error?.response?.headers?.["x-correlation-id"] || null;
+  transformed.correlationId =
+    error?.response?.headers?.["x-correlation-id"] || null;
   return transformed;
 };
 
@@ -233,8 +253,9 @@ export const placeBambooOrder = async ({
   metadata = {},
 }) => {
   const client = getAxiosClient();
-  const resolvedAccountId =
-    String(accountId || process.env.BAMBOO_ACCOUNT_ID || "").trim();
+  const resolvedAccountId = String(
+    accountId || process.env.BAMBOO_ACCOUNT_ID || "",
+  ).trim();
   if (!resolvedAccountId) {
     const error = new Error("BAMBOO_ACCOUNT_ID_MISSING");
     error.code = "BAMBOO_ACCOUNT_ID_MISSING";
@@ -263,7 +284,7 @@ export const placeBambooOrder = async ({
     const response = await client.post(DEFAULT_PLACE_ORDER_PATH, payload);
     return normalizeOrderData(response.data);
   } catch (error) {
-   const stockError = toBambooStockError(error);
+    const stockError = toBambooStockError(error);
     if (stockError) {
       throw stockError;
     }
@@ -273,7 +294,9 @@ export const placeBambooOrder = async ({
 
 export const getBambooOrder = async (orderId) => {
   const client = getAxiosClient();
-  const response = await client.get(resolvePath(DEFAULT_GET_ORDER_PATH, orderId));
+  const response = await client.get(
+    resolvePath(DEFAULT_GET_ORDER_PATH, orderId),
+  );
   return normalizeOrderData(response.data);
 };
 
@@ -325,8 +348,14 @@ export const placeAndResolveBambooOrder = async ({
   metadata = {},
 }) => {
   const requestedQuantity = Math.max(1, Number(quantity) || 1);
-  const pollAttempts = Math.max(1, Number(process.env.BAMBOO_ORDER_POLL_ATTEMPTS || 3));
-  const pollIntervalMs = Math.max(0, Number(process.env.BAMBOO_ORDER_POLL_INTERVAL_MS || 1000));
+  const pollAttempts = Math.max(
+    1,
+    Number(process.env.BAMBOO_ORDER_POLL_ATTEMPTS || 3),
+  );
+  const pollIntervalMs = Math.max(
+    0,
+    Number(process.env.BAMBOO_ORDER_POLL_INTERVAL_MS || 1000),
+  );
 
   let latest = await placeBambooOrder({
     productId,
