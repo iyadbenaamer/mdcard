@@ -96,6 +96,7 @@ export const createOne = async (req, res) => {
       typeId,
       title,
       buyPrice,
+      buyPriceUsd,
       sellPrice,
       bambooProductId,
       value,
@@ -103,7 +104,20 @@ export const createOne = async (req, res) => {
       order,
     } = req.body;
 
-    if (!typeId || buyPrice === undefined || sellPrice === undefined) {
+    const nextBuyPrice =
+      buyPrice === undefined || buyPrice === null || buyPrice === ""
+        ? null
+        : Number(buyPrice);
+    const nextBuyPriceUsd =
+      buyPriceUsd === undefined || buyPriceUsd === null || buyPriceUsd === ""
+        ? null
+        : Number(buyPriceUsd);
+
+    if (
+      !typeId ||
+      (nextBuyPrice === null && nextBuyPriceUsd === null) ||
+      sellPrice === undefined
+    ) {
       return res
         .status(400)
         .json({ code: "CARD_TIER_REQUIRED_FIELDS_MISSING" });
@@ -115,15 +129,24 @@ export const createOne = async (req, res) => {
     }
 
     const nextBambooProductId = bambooProductId?.trim() ?? "";
-    const nextBambooValue = value === undefined || value === null || value === ""
-      ? null
-      : Number(value);
+    const nextBambooValue =
+      value === undefined || value === null || value === ""
+        ? null
+        : Number(value);
     if (cardType.fulfillmentSource === "bamboo") {
       if (!nextBambooProductId) {
-        return res.status(400).json({ code: "CARD_TIER_BAMBOO_PRODUCT_ID_REQUIRED" });
+        return res
+          .status(400)
+          .json({ code: "CARD_TIER_BAMBOO_PRODUCT_ID_REQUIRED" });
       }
-      if (nextBambooValue === null || Number.isNaN(nextBambooValue) || nextBambooValue <= 0) {
-        return res.status(400).json({ code: "CARD_TIER_BAMBOO_VALUE_REQUIRED" });
+      if (
+        nextBambooValue === null ||
+        Number.isNaN(nextBambooValue) ||
+        nextBambooValue <= 0
+      ) {
+        return res
+          .status(400)
+          .json({ code: "CARD_TIER_BAMBOO_VALUE_REQUIRED" });
       }
     }
 
@@ -149,9 +172,11 @@ export const createOne = async (req, res) => {
       typeId,
       order: nextOrder,
       title,
-      buyPrice,
+      buyPrice: Number.isNaN(nextBuyPrice) ? null : nextBuyPrice,
+      buyPriceUsd: Number.isNaN(nextBuyPriceUsd) ? null : nextBuyPriceUsd,
       sellPrice,
-      bambooProductId: cardType.fulfillmentSource === "bamboo" ? nextBambooProductId : "",
+      bambooProductId:
+        cardType.fulfillmentSource === "bamboo" ? nextBambooProductId : "",
       value: cardType.fulfillmentSource === "bamboo" ? nextBambooValue : null,
       isActive:
         typeof normalizedIsActive === "boolean"
@@ -169,7 +194,16 @@ export const createOne = async (req, res) => {
 export const updateOne = async (req, res) => {
   try {
     const { id } = req.query;
-    const { typeId, title, buyPrice, sellPrice, bambooProductId, value, isActive } = req.body;
+    const {
+      typeId,
+      title,
+      buyPrice,
+      buyPriceUsd,
+      sellPrice,
+      bambooProductId,
+      value,
+      isActive,
+    } = req.body;
 
     const tier = await CardTier.findById(id);
     if (!tier) {
@@ -185,16 +219,26 @@ export const updateOne = async (req, res) => {
     }
 
     const targetType = await CardType.findById(typeId ?? tier.typeId);
-    const nextBambooProductId = bambooProductId?.trim() ?? tier.bambooProductId ?? "";
-    const nextBambooValue = value === undefined || value === null || value === ""
-      ? tier.value ?? null
-      : Number(value);
+    const nextBambooProductId =
+      bambooProductId?.trim() ?? tier.bambooProductId ?? "";
+    const nextBambooValue =
+      value === undefined || value === null || value === ""
+        ? (tier.value ?? null)
+        : Number(value);
     if (targetType?.fulfillmentSource === "bamboo") {
       if (!nextBambooProductId) {
-        return res.status(400).json({ code: "CARD_TIER_BAMBOO_PRODUCT_ID_REQUIRED" });
+        return res
+          .status(400)
+          .json({ code: "CARD_TIER_BAMBOO_PRODUCT_ID_REQUIRED" });
       }
-      if (nextBambooValue === null || Number.isNaN(nextBambooValue) || nextBambooValue <= 0) {
-        return res.status(400).json({ code: "CARD_TIER_BAMBOO_VALUE_REQUIRED" });
+      if (
+        nextBambooValue === null ||
+        Number.isNaN(nextBambooValue) ||
+        nextBambooValue <= 0
+      ) {
+        return res
+          .status(400)
+          .json({ code: "CARD_TIER_BAMBOO_VALUE_REQUIRED" });
       }
       tier.bambooProductId = nextBambooProductId;
       tier.value = nextBambooValue;
@@ -208,7 +252,21 @@ export const updateOne = async (req, res) => {
     }
 
     if (buyPrice !== undefined) {
-      tier.buyPrice = buyPrice;
+      if (buyPrice === null || buyPrice === "") {
+        tier.buyPrice = null;
+      } else {
+        const parsed = Number(buyPrice);
+        tier.buyPrice = Number.isNaN(parsed) ? null : parsed;
+      }
+    }
+
+    if (buyPriceUsd !== undefined) {
+      if (buyPriceUsd === null || buyPriceUsd === "") {
+        tier.buyPriceUsd = null;
+      } else {
+        const parsed = Number(buyPriceUsd);
+        tier.buyPriceUsd = Number.isNaN(parsed) ? null : parsed;
+      }
     }
 
     if (sellPrice !== undefined) {

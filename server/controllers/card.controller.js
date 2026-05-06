@@ -9,9 +9,11 @@ import Transaction from "../models/transaction.model.js";
 import User from "../models/user.model.js";
 import Order from "../models/order.model.js";
 import CustomePricing from "../models/customePricing.model.js";
+import Setting from "../models/setting.model.js";
 import { placeAndResolveBambooOrder } from "../services/bambooCard.js";
 
 import { handleError } from "../utils/errorHandler.js";
+import { getEffectiveBuyPrice } from "../utils/priceCalculator.js";
 import parsePagination from "../utils/parsePagination.js";
 import crypto from "crypto";
 import { decryptCardCode, encryptCardCode } from "../utils/cardCodeCrypto.js";
@@ -714,6 +716,12 @@ export const checkoutCart = async (req, res) => {
     const roundToCents = (v) =>
       Math.round((Number(v) + Number.EPSILON) * 100) / 100;
 
+    // Fetch dollarRate setting for calculating effective buyPrice
+    const dollarRateSetting = await Setting.findOne({
+      key: "سعر الدولار",
+    }).select("value");
+    const dollarRate = Number(dollarRateSetting?.value) || 1;
+
     const requestedItems = [];
     const availabilityIssues = [];
     let totalCost = 0;
@@ -756,10 +764,18 @@ export const checkoutCart = async (req, res) => {
         userId: user._id,
         tierId,
       });
-      const buyPrice =
-        customPriceRecord && customPriceRecord.buyPrice !== undefined
-          ? Number(customPriceRecord.buyPrice)
-          : Number(tier.buyPrice);
+
+      // Calculate effective buyPrice: custom price > calculated USD price > regular buyPrice
+      let buyPrice;
+      if (customPriceRecord && customPriceRecord.buyPrice !== undefined) {
+        buyPrice = Number(customPriceRecord.buyPrice);
+      } else {
+        buyPrice = getEffectiveBuyPrice(
+          tier.buyPrice,
+          tier.buyPriceUsd,
+          dollarRate,
+        );
+      }
 
       if (Number.isNaN(buyPrice) || buyPrice <= 0) {
         return res.status(400).json({ code: "CARD_TIER_PRICE_INVALID" });

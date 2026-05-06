@@ -4,10 +4,12 @@ import path from "path";
 import CardType from "../models/cardType.model.js";
 import CardTier from "../models/cardTier.model.js";
 import CardCategory from "../models/cardCategory.model.js";
+import Setting from "../models/setting.model.js";
 
 import { safeDelete } from "../middleware/media.middleware.js";
 
 import { handleError } from "../utils/errorHandler.js";
+import { getEffectiveBuyPrice } from "../utils/priceCalculator.js";
 import parsePagination from "../utils/parsePagination.js";
 
 const normalizeFulfillmentSource = (value) =>
@@ -148,6 +150,12 @@ export const getOne = async (req, res) => {
       return res.status(400).json({ code: "CARD_TYPE_ID_INVALID" });
     }
 
+    // Fetch dollarRate setting for calculating effective buyPrice
+    const dollarRateSetting = await Setting.findOne({
+      key: "سعر الدولار",
+    }).select("value");
+    const dollarRate = Number(dollarRateSetting?.value) || 1;
+
     const tierPipeline = [
       {
         $match: {
@@ -263,7 +271,31 @@ export const getOne = async (req, res) => {
       return res.status(404).json({ code: "CARD_TYPE_NOT_FOUND" });
     }
 
-    return res.status(200).json(cardTypes[0]);
+    // Calculate effective buyPrice for each tier (for API response - end user sees this)
+    const result = cardTypes[0];
+    if (Array.isArray(result.tiers)) {
+      if (req.admin) {
+        // Admin sees original data (buyPrice + buyPriceUsd) for editing
+        result.tiers = result.tiers.map((tier) => tier);
+      } else {
+        // End users see calculated effective price only (hide buyPriceUsd)
+        result.tiers = result.tiers.map((tier) => {
+          const effectiveBuyPrice = getEffectiveBuyPrice(
+            tier.buyPrice,
+            tier.buyPriceUsd,
+            dollarRate,
+          );
+          // Return tier with calculated buyPrice, hide internal buyPriceUsd
+          const { buyPriceUsd, ...tierWithoutUsd } = tier;
+          return {
+            ...tierWithoutUsd,
+            buyPrice: effectiveBuyPrice,
+          };
+        });
+      }
+    }
+
+    return res.status(200).json(result);
   } catch (err) {
     return handleError(err, res);
   }
@@ -271,13 +303,7 @@ export const getOne = async (req, res) => {
 
 export const createOne = async (req, res) => {
   try {
-    let {
-      name,
-      isActive,
-      categoryId,
-      order,
-      fulfillmentSource,
-    } = req.body;
+    let { name, isActive, categoryId, order, fulfillmentSource } = req.body;
     const image = req.filePath;
     const printImage = req.printFilePath ?? req.body.printImage;
     const redeemFormat = req.body.redeemFormat?.trim();
@@ -339,12 +365,7 @@ export const createOne = async (req, res) => {
 export const updateOne = async (req, res) => {
   try {
     const { id } = req.query;
-    let {
-      name,
-      categoryId,
-      isActive,
-      fulfillmentSource,
-    } = req.body;
+    let { name, categoryId, isActive, fulfillmentSource } = req.body;
     const image = req.filePath ?? req.body.image;
     const printImage = req.printFilePath ?? req.body.printImage;
     const redeemFormat = req.body.redeemFormat;
@@ -376,7 +397,8 @@ export const updateOne = async (req, res) => {
     }
 
     if (fulfillmentSource !== undefined) {
-      const nextFulfillmentSource = normalizeFulfillmentSource(fulfillmentSource);
+      const nextFulfillmentSource =
+        normalizeFulfillmentSource(fulfillmentSource);
       cardType.fulfillmentSource = nextFulfillmentSource;
     }
 
@@ -391,7 +413,11 @@ export const updateOne = async (req, res) => {
 
     if (printImage !== undefined) {
       if (cardType.printImage && cardType.printImage !== printImage) {
-        const oldPrintPath = path.join(process.cwd(), "public", cardType.printImage);
+        const oldPrintPath = path.join(
+          process.cwd(),
+          "public",
+          cardType.printImage,
+        );
         await safeDelete(oldPrintPath);
       }
       cardType.printImage = printImage;
@@ -417,7 +443,11 @@ export const updateOne = async (req, res) => {
       await safeDelete(newImagePath);
     }
     if (req.printFilePath) {
-      const newPrintPath = path.join(process.cwd(), "public", req.printFilePath);
+      const newPrintPath = path.join(
+        process.cwd(),
+        "public",
+        req.printFilePath,
+      );
       await safeDelete(newPrintPath);
     }
     return handleError(err, res);

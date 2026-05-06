@@ -43,12 +43,12 @@ const Sidebar = ({ showLogo = true, onItemClick }) => {
           <SidebarItem to="/cards" name="جميع البطاقات" onClick={onItemClick}>
             <CardIcon />
           </SidebarItem>
-          <SidebarItem to="/orders" name="كافة الطلبات" onClick={onItemClick}>
+          <SidebarItem to="/orders" name="جميع الطلبات" onClick={onItemClick}>
             <OrdersIcon />
           </SidebarItem>
           <SidebarItem
             to="/transactions"
-            name="كافة المعاملات"
+            name="جميع المعاملات"
             onClick={onItemClick}
           >
             <TransactionsIcon fill="transparent" />

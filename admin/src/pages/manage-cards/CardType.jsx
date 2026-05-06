@@ -29,9 +29,8 @@ const CardType = () => {
   const [cardTypeImage, setCardTypeImage] = useState("");
   const [cardTypePrintImage, setCardTypePrintImage] = useState("");
   const [cardTypeIsActive, setCardTypeIsActive] = useState(true);
-  const [cardTypeFulfillmentSource, setCardTypeFulfillmentSource] = useState(
-    "local",
-  );
+  const [cardTypeFulfillmentSource, setCardTypeFulfillmentSource] =
+    useState("local");
   const [draftImageFile, setDraftImageFile] = useState(null);
   const [draftPrintImageFile, setDraftPrintImageFile] = useState(null);
   const [redeemFormat, setRedeemFormat] = useState("");
@@ -159,8 +158,9 @@ const CardType = () => {
   const tableColumns = [
     { key: "order", label: "الترتيب", width: "80px" },
     { key: "title", label: "العنوان" },
-    { key: "buy", label: "الشراء", width: "120px" },
-    { key: "sell", label: "البيع", width: "120px" },
+    { key: "buy", label: "الشراء", width: "100px" },
+    { key: "buyUsd", label: "الشراء (USD)", width: "110px" },
+    { key: "sell", label: "البيع", width: "100px" },
     {
       key: "actions",
       label: isEditing ? "سحب" : "",
@@ -261,16 +261,29 @@ const CardType = () => {
   };
 
   const handleCreateTier = useCallback(
-    async ({ title, buyPrice, sellPrice, bambooProductId, value, isActive }) => {
+    async ({
+      title,
+      buyPrice,
+      buyPriceUsd,
+      sellPrice,
+      bambooProductId,
+      value,
+      isActive,
+    }) => {
       if (!typeId) {
         return { ok: false, error: "تعذر تحديد نوع البطاقة." };
       }
-      if (buyPrice === "" || sellPrice === "") {
-        return { ok: false, error: "سعر الشراء والبيع مطلوبان." };
+      if ((buyPrice === "" && buyPriceUsd === "") || sellPrice === "") {
+        return {
+          ok: false,
+          error: "سعر الشراء (أو بالدولار) وسعر البيع مطلوبان.",
+        };
       }
       const nextBambooProductId = bambooProductId?.trim() ?? "";
       const nextBambooValue =
-        value === "" || value === null || value === undefined ? "" : Number(value);
+        value === "" || value === null || value === undefined
+          ? ""
+          : Number(value);
       if (cardTypeFulfillmentSource === "bamboo") {
         if (!nextBambooProductId) {
           return { ok: false, error: "معرف منتج Bamboo مطلوب." };
@@ -287,7 +300,12 @@ const CardType = () => {
         await axiosClient.post("/card-tiers", {
           typeId,
           title: title?.trim() ?? "",
-          buyPrice: Number(buyPrice),
+          buyPrice:
+            buyPrice === "" || buyPrice === null ? null : Number(buyPrice),
+          buyPriceUsd:
+            buyPriceUsd === "" || buyPriceUsd === null
+              ? null
+              : Number(buyPriceUsd),
           sellPrice: Number(sellPrice),
           bambooProductId:
             cardTypeFulfillmentSource === "bamboo" ? nextBambooProductId : "",
@@ -309,6 +327,7 @@ const CardType = () => {
   const CreateTierDialog = ({ onCreate, onCancel }) => {
     const [title, setTitle] = useState("");
     const [buyPrice, setBuyPrice] = useState("");
+    const [buyPriceUsd, setBuyPriceUsd] = useState("");
     const [sellPrice, setSellPrice] = useState("");
     const [bambooProductId, setBambooProductId] = useState("");
     const [bambooValue, setBambooValue] = useState("");
@@ -333,6 +352,13 @@ const CardType = () => {
             type="number"
             value={buyPrice}
             onChange={(event) => setBuyPrice(event.target.value)}
+          />
+          <CustomInput
+            label="سعر الشراء بالدولار (USD)"
+            type="number"
+            value={buyPriceUsd}
+            onChange={(event) => setBuyPriceUsd(event.target.value)}
+            placeholder="اتركه فارغًا إذا لم يكن مطلوبًا"
           />
           <CustomInput
             label="سعر البيع"
@@ -388,6 +414,7 @@ const CardType = () => {
               const result = await onCreate({
                 title,
                 buyPrice,
+                buyPriceUsd,
                 sellPrice,
                 bambooProductId,
                 value: bambooValue,
@@ -456,8 +483,8 @@ const CardType = () => {
         </h2>
         <p className="mt-2 text-sm text-slate-600">
           سيتم حذف نوع البطاقة
-          <span className="font-semibold text-slate-800"> {typeName}</span>.
-          هل تريد المتابعة؟
+          <span className="font-semibold text-slate-800"> {typeName}</span>. هل
+          تريد المتابعة؟
         </p>
         {dialogError && (
           <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-600">
@@ -533,7 +560,8 @@ const CardType = () => {
               }}
               disabled={deleteTypeId === typeId}
             >
-              حذف             </RedBtn>
+              حذف{" "}
+            </RedBtn>
             <PrimaryBtn onClick={handleOpenCreateDialog}>
               إنشاء فئة بطاقة جديدة
             </PrimaryBtn>
@@ -692,9 +720,7 @@ const CardType = () => {
                   </select>
                 ) : (
                   <div className="text-sm text-slate-700">
-                    {cardTypeFulfillmentSource === "bamboo"
-                      ? "Bamboo"
-                      : "محلي"}
+                    {cardTypeFulfillmentSource === "bamboo" ? "Bamboo" : "محلي"}
                   </div>
                 )}
               </div>
@@ -792,6 +818,9 @@ const CardType = () => {
                   </TableCell>
                   <TableCell className="text-slate-600">
                     {tier.buyPrice}
+                  </TableCell>
+                  <TableCell className="text-slate-600">
+                    {tier.buyPriceUsd || "-"}
                   </TableCell>
                   <TableCell className="text-slate-600">
                     {tier.sellPrice}

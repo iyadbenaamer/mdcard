@@ -6,6 +6,7 @@ import axiosClient from "utils/AxiosClient";
 const AddSettingDialog = ({ onAdded, onClose }) => {
   const [form, setForm] = useState({ key: "", value: "", description: "" });
   const [error, setError] = useState("");
+  const protectedSettings = ["support", "سعر الدولار"];
 
   const handleSubmit = async () => {
     setError("");
@@ -13,8 +14,8 @@ const AddSettingDialog = ({ onAdded, onClose }) => {
       setError("المفتاح مطلوب.");
       return;
     }
-    if ((form.key || "").toString().trim() === "support") {
-      setError("لا يمكن إنشاء إعداد باسم 'support'.");
+    if (protectedSettings.includes((form.key || "").toString().trim())) {
+      setError(`لا يمكن إنشاء إعداد باسم '${form.key}'`);
       return;
     }
     try {

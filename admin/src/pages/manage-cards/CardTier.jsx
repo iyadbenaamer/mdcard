@@ -24,9 +24,8 @@ const CardTier = () => {
   const cardTypeId = searchParams.get("cardTypeId");
   const [cardTierTitle, setCardTierTitle] = useState("");
   const [cardTypeName, setCardTypeName] = useState("");
-  const [cardTypeFulfillmentSource, setCardTypeFulfillmentSource] = useState(
-    "local",
-  );
+  const [cardTypeFulfillmentSource, setCardTypeFulfillmentSource] =
+    useState("local");
   const [tier, setTier] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -45,6 +44,7 @@ const CardTier = () => {
   const [importMessage, setImportMessage] = useState("");
   const [draftTitle, setDraftTitle] = useState("");
   const [draftBuyPrice, setDraftBuyPrice] = useState("");
+  const [draftBuyPriceUsd, setDraftBuyPriceUsd] = useState("");
   const [draftSellPrice, setDraftSellPrice] = useState("");
   const [draftBambooProductId, setDraftBambooProductId] = useState("");
   const [draftBambooValue, setDraftBambooValue] = useState("");
@@ -181,9 +181,7 @@ const CardTier = () => {
         setTier(found);
         setCardTierTitle(found.title ?? "");
         setCardTypeName(typePayload.name ?? payload.name ?? "");
-        setCardTypeFulfillmentSource(
-          typePayload.fulfillmentSource ?? "local",
-        );
+        setCardTypeFulfillmentSource(typePayload.fulfillmentSource ?? "local");
         setLevels([
           { key: "categories", label: "التصنيفات" },
           { key: "category", label: payload.categoryName ?? "تصنيف" },
@@ -193,6 +191,7 @@ const CardTier = () => {
         if (!isEditing) {
           setDraftTitle(found.title ?? "");
           setDraftBuyPrice(found.buyPrice ?? "");
+          setDraftBuyPriceUsd(found.buyPriceUsd ?? "");
           setDraftSellPrice(found.sellPrice ?? "");
           setDraftBambooProductId(found.bambooProductId ?? "");
           setDraftBambooValue(found.value ?? "");
@@ -292,6 +291,7 @@ const CardTier = () => {
     async ({
       title,
       buyPrice,
+      buyPriceUsd,
       sellPrice,
       bambooProductId,
       value,
@@ -300,8 +300,11 @@ const CardTier = () => {
       if (!cardTierId) {
         return { ok: false, error: "تعذر تحديد فئة البطاقة." };
       }
-      if (buyPrice === "" || sellPrice === "") {
-        return { ok: false, error: "سعر الشراء والبيع مطلوبان." };
+      if ((buyPrice === "" && buyPriceUsd === "") || sellPrice === "") {
+        return {
+          ok: false,
+          error: "سعر الشراء (أو بالدولار) وسعر البيع مطلوبان.",
+        };
       }
       const nextBambooProductId = bambooProductId?.trim() ?? "";
       const nextBambooValue =
@@ -325,12 +328,15 @@ const CardTier = () => {
           "/card-tiers",
           {
             title: title?.trim() ?? "",
-            buyPrice: Number(buyPrice),
+            buyPrice:
+              buyPrice === "" || buyPrice === null ? null : Number(buyPrice),
+            buyPriceUsd:
+              buyPriceUsd === "" || buyPriceUsd === null
+                ? null
+                : Number(buyPriceUsd),
             sellPrice: Number(sellPrice),
             bambooProductId:
-              cardTypeFulfillmentSource === "bamboo"
-                ? nextBambooProductId
-                : "",
+              cardTypeFulfillmentSource === "bamboo" ? nextBambooProductId : "",
             value:
               cardTypeFulfillmentSource === "bamboo" ? nextBambooValue : null,
             isActive,
@@ -671,6 +677,7 @@ const CardTier = () => {
     const result = await handleEditTier({
       title: draftTitle,
       buyPrice: draftBuyPrice,
+      buyPriceUsd: draftBuyPriceUsd,
       sellPrice: draftSellPrice,
       bambooProductId: draftBambooProductId,
       value: draftBambooValue,
@@ -962,6 +969,25 @@ const CardTier = () => {
                       />
                     ) : (
                       tier.buyPrice
+                    )}
+                  </TableCell>
+                </TableRow>
+                <TableRow>
+                  <TableCell className="font-medium text-slate-600">
+                    سعر الشراء بالدولار
+                  </TableCell>
+                  <TableCell>
+                    {isEditing ? (
+                      <CustomInput
+                        type="number"
+                        value={draftBuyPriceUsd}
+                        onChange={(event) =>
+                          setDraftBuyPriceUsd(event.target.value)
+                        }
+                        placeholder="اتركه فارغًا إذا لم يكن مطلوبًا"
+                      />
+                    ) : (
+                      tier.buyPriceUsd || "-"
                     )}
                   </TableCell>
                 </TableRow>

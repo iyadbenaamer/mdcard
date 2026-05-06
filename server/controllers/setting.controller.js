@@ -3,6 +3,16 @@ import { Types } from "mongoose";
 import Setting from "../models/setting.model.js";
 import { handleError } from "../utils/errorHandler.js";
 
+const DOLLAR_RATE_KEYS = ["سعر الدولار", "dollarRate"];
+const isDollarRateKey = (key) =>
+  DOLLAR_RATE_KEYS.includes((key ?? "").toString().trim());
+const isNumericDollarRate = (value) => {
+  if (value === undefined || value === null) return false;
+  const strValue = value.toString().trim();
+  if (!strValue) return false;
+  return !Number.isNaN(Number(strValue));
+};
+
 export const getAll = async (req, res) => {
   try {
     const settings = await Setting.find().sort({ key: 1 });
@@ -35,7 +45,20 @@ export const createOne = async (req, res) => {
     if (!trimmedKey)
       return res.status(400).json({ code: "SETTING_KEY_REQUIRED" });
 
-    // support allowed to be created/updated
+    if (isDollarRateKey(trimmedKey) && !isNumericDollarRate(value)) {
+      return res.status(400).json({
+        code: "SETTING_DOLLAR_RATE_VALUE_INVALID",
+        message: "Dollar rate value must be numeric",
+      });
+    }
+
+    // Prevent creating protected settings
+    if (["support", "سعر الدولار"].includes(trimmedKey)) {
+      return res.status(403).json({
+        code: "SETTING_CANNOT_CREATE",
+        message: "Cannot create protected setting",
+      });
+    }
 
     const exists = await Setting.findOne({ key: trimmedKey });
     if (exists) return res.status(409).json({ code: "SETTING_KEY_EXISTS" });
@@ -71,18 +94,28 @@ export const updateOne = async (req, res) => {
       return res.status(400).json({ code: "SETTING_NO_UPDATE_FIELDS" });
     }
 
-    // do not allow renaming the support key
+    const targetKey = update.key ?? existingSetting.key;
     if (
-      existingSetting.key === "support" &&
-      update.key &&
-      update.key !== "support"
+      isDollarRateKey(targetKey) &&
+      update.value !== undefined &&
+      !isNumericDollarRate(update.value)
     ) {
-      return res
-        .status(403)
-        .json({
-          code: "SETTING_CANNOT_RENAME",
-          message: "Cannot rename support setting",
-        });
+      return res.status(400).json({
+        code: "SETTING_DOLLAR_RATE_VALUE_INVALID",
+        message: "Dollar rate value must be numeric",
+      });
+    }
+
+    // do not allow renaming the protected keys (support, dollarRate)
+    if (
+      ["support", "سعر الدولار"].includes(existingSetting.key) &&
+      update.key &&
+      !["support", "سعر الدولار"].includes(update.key)
+    ) {
+      return res.status(403).json({
+        code: "SETTING_CANNOT_RENAME",
+        message: "Cannot rename protected setting",
+      });
     }
 
     // If key is being updated, ensure uniqueness
@@ -120,7 +153,7 @@ export const updateMany = async (req, res) => {
       }
 
       if (id) {
-        // protect support key from being renamed via bulk edit
+        // protect support and dollarRate keys from being renamed via bulk edit
         const existing = await Setting.findById(id);
         const update = {};
         if (key !== undefined) update.key = key?.toString().trim();
@@ -131,12 +164,24 @@ export const updateMany = async (req, res) => {
 
         if (
           existing &&
-          existing.key === "support" &&
+          ["support", "سعر الدولار"].includes(existing.key) &&
           update.key &&
-          update.key !== "support"
+          !["support", "سعر الدولار"].includes(update.key)
         ) {
-          // skip attempts to rename support
+          // skip attempts to rename protected settings
           delete update.key;
+        }
+
+        const targetKey = update.key ?? existing?.key;
+        if (
+          isDollarRateKey(targetKey) &&
+          update.value !== undefined &&
+          !isNumericDollarRate(update.value)
+        ) {
+          return res.status(400).json({
+            code: "SETTING_DOLLAR_RATE_VALUE_INVALID",
+            message: "Dollar rate value must be numeric",
+          });
         }
 
         if (update.key) {
@@ -161,6 +206,12 @@ export const updateMany = async (req, res) => {
       } else {
         const trimmedKey = key?.toString().trim();
         if (!trimmedKey) continue;
+        if (isDollarRateKey(trimmedKey) && !isNumericDollarRate(value)) {
+          return res.status(400).json({
+            code: "SETTING_DOLLAR_RATE_VALUE_INVALID",
+            message: "Dollar rate value must be numeric",
+          });
+        }
         const exists = await Setting.findOne({ key: trimmedKey });
         if (exists) continue;
         const newSetting = new Setting({
@@ -188,13 +239,11 @@ export const deleteOne = async (req, res) => {
     }
     const setting = await Setting.findById(id);
     if (!setting) return res.status(404).json({ code: "SETTING_NOT_FOUND" });
-    if (setting.key === "support") {
-      return res
-        .status(403)
-        .json({
-          code: "SETTING_CANNOT_DELETE",
-          message: "Cannot delete support setting",
-        });
+    if (["support", "سعر الدولار"].includes(setting.key)) {
+      return res.status(403).json({
+        code: "SETTING_CANNOT_DELETE",
+        message: "Cannot delete protected setting",
+      });
     }
     const deleted = await Setting.findByIdAndDelete(id);
     return res.status(200).json({ message: "SETTING_DELETED" });

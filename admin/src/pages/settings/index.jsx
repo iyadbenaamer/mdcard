@@ -13,6 +13,15 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
+  const protectedSettings = ["support", "سعر الدولار", "dollarRate"];
+  const isDollarRateKey = (key) => ["سعر الدولار", "dollarRate"].includes(key);
+  const isNumericValue = (value) => {
+    if (value === null || value === undefined) return false;
+    const strValue = String(value).trim();
+    if (!strValue) return false;
+    return !Number.isNaN(Number(strValue));
+  };
+
   const { openDialog, closeDialog } = useDialog();
 
   /* ---------------------------------- */
@@ -32,12 +41,19 @@ const Settings = () => {
     try {
       const res = await axiosClient.get("/settings/all");
       let list = res.data || [];
-      // always display support entry client‑side even if missing from backend
+      // always display support and dollarRate entries client‑side even if missing from backend
       if (!list.find((it) => it.key === "support")) {
         list.unshift({
           key: "support",
           value: null,
           description: "",
+          _id: null,
+        });
+      }
+      if (!list.find((it) => it.key === "سعر الدولار")) {
+        list.unshift({
+          key: "سعر الدولار",
+          value: null,
           _id: null,
         });
       }
@@ -71,7 +87,7 @@ const Settings = () => {
   };
 
   const handleDelete = async (setting) => {
-    if (setting.key === "support") {
+    if (protectedSettings.includes(setting.key)) {
       // support is static and cannot be removed
       setMessage({ type: "error", text: "لا يمكن حذف الإعداد الثابت" });
       return;
@@ -100,6 +116,15 @@ const Settings = () => {
 
   const handleBulkSave = async () => {
     if (!Object.keys(edits).length) return;
+
+    const dollarRateSetting = settings.find((s) => isDollarRateKey(s.key));
+    const dollarRateValue = dollarRateSetting
+      ? edits[dollarRateSetting.key]
+      : undefined;
+    if (dollarRateValue !== undefined && !isNumericValue(dollarRateValue)) {
+      setMessage({ type: "error", text: "قيمة سعر الدولار يجب أن تكون رقمية" });
+      return;
+    }
 
     setSaving(true);
     try {
@@ -227,6 +252,7 @@ const Settings = () => {
 
                     {editingAll ? (
                       <input
+                        type={isDollarRateKey(s.key) ? "number" : "text"}
                         value={edits[s.key] ?? ""}
                         onChange={(e) =>
                           setEdits((ex) => ({
@@ -251,14 +277,16 @@ const Settings = () => {
                     )}
                   </div>
 
-                  {!editingAll && s._id && s.key !== "support" && (
-                    <button
-                      onClick={() => handleDelete(s)}
-                      className="text-sm px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition"
-                    >
-                      حذف
-                    </button>
-                  )}
+                  {!editingAll &&
+                    s._id &&
+                    !protectedSettings.includes(s.key) && (
+                      <button
+                        onClick={() => handleDelete(s)}
+                        className="text-sm px-4 py-2 rounded-lg bg-red-500 text-white hover:bg-red-600 transition"
+                      >
+                        حذف
+                      </button>
+                    )}
                 </div>
               </div>
             ))}
