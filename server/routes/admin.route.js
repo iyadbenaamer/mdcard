@@ -15,7 +15,13 @@ import {
   createDeposit,
   createRefund,
   getAdminTransactions,
+  getAdminTransactionsList,
+  deleteAdminTransactions,
 } from "../controllers/transaction.controller.js";
+import {
+  deleteAdminOrders,
+  getAdminOrders,
+} from "../controllers/order.controller.js";
 
 import { verifyAdmin } from "../middleware/auth.middleware.js";
 
@@ -38,6 +44,18 @@ router.post("/refund", verifyAdmin, createRefund);
 
 // Admin transactions list
 router.get("/transactions", verifyAdmin, getAdminTransactions);
+
+// Admin transactions list with filters
+router.get("/transactions/list", verifyAdmin, getAdminTransactionsList);
+
+// Admin transactions bulk delete
+router.delete("/transactions", verifyAdmin, deleteAdminTransactions);
+
+// Admin orders list
+router.get("/orders", verifyAdmin, getAdminOrders);
+
+// Admin orders bulk delete
+router.delete("/orders", verifyAdmin, deleteAdminOrders);
 
 // Admin user update
 router.patch("/user", verifyAdmin, updateUser);

@@ -7,6 +7,53 @@ import { handleError } from "../utils/errorHandler.js";
 import parsePagination from "../utils/parsePagination.js";
 import { decryptCardCode } from "../utils/cardCodeCrypto.js";
 
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const buildUserSearchFilter = (searchTerm) => {
+  const term = searchTerm.trim();
+  const terms = term.split(/\s+/);
+
+  const patterns = new Set();
+  const addPattern = (item) => {
+    const trimmed = item.trim();
+    if (!trimmed) return;
+    patterns.add(escapeRegex(trimmed));
+  };
+
+  addPattern(term);
+  terms.forEach(addPattern);
+
+  const orConditions = [];
+  for (const pattern of patterns) {
+    const regex = new RegExp(pattern, "i");
+    orConditions.push({ name: regex }, { phone: regex });
+  }
+
+  return orConditions.length > 0 ? { $or: orConditions } : {};
+};
+
+const normalizeDate = (value, isEnd) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  if (typeof value === "string" && value.length <= 10) {
+    if (isEnd) {
+      parsed.setHours(23, 59, 59, 999);
+    } else {
+      parsed.setHours(0, 0, 0, 0);
+    }
+  }
+
+  return parsed;
+};
+
+const parseAmount = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
 export const createDeposit = async (req, res) => {
   try {
     const { userId, amount } = req.body;
@@ -241,6 +288,162 @@ export const getAdminTransactions = async (req, res) => {
       .limit(limit);
 
     return res.status(200).json(transactions);
+  } catch (err) {
+    return handleError(err, res);
+  }
+};
+
+export const getAdminTransactionsList = async (req, res) => {
+  try {
+    const {
+      userId,
+      userQuery,
+      type,
+      minAmount,
+      maxAmount,
+      startDate,
+      endDate,
+      sortBy,
+      sortOrder,
+    } = req.query;
+    const { page, limit } = parsePagination(req.query.page, req.query.limit);
+
+    const filter = {};
+
+    if (userId) {
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        return res.status(400).json({ code: "TRANSACTION_USER_INVALID" });
+      }
+      filter.userId = userId;
+    } else if (userQuery && userQuery.trim()) {
+      const users = await User.find(buildUserSearchFilter(userQuery))
+        .select("_id")
+        .limit(200);
+      const userIds = users.map((user) => user._id);
+      if (userIds.length === 0) {
+        return res.status(200).json({
+          transactions: [],
+          pagination: {
+            page,
+            limit,
+            total: 0,
+            totalPages: 1,
+            hasMore: false,
+          },
+        });
+      }
+      filter.userId = { $in: userIds };
+    }
+
+    if (type) {
+      if (!{ deposit: 1, purchase: 1, refund: 1 }[type]) {
+        return res.status(400).json({ code: "TRANSACTION_TYPE_INVALID" });
+      }
+      filter.type = type;
+    }
+
+    const parsedMinAmount = parseAmount(minAmount);
+    const parsedMaxAmount = parseAmount(maxAmount);
+    if (parsedMinAmount !== null || parsedMaxAmount !== null) {
+      if (
+        (parsedMinAmount !== null && parsedMinAmount < 0) ||
+        (parsedMaxAmount !== null && parsedMaxAmount < 0)
+      ) {
+        return res.status(400).json({ code: "TRANSACTION_AMOUNT_INVALID" });
+      }
+      filter.amount = {};
+      if (parsedMinAmount !== null) {
+        filter.amount.$gte = parsedMinAmount;
+      }
+      if (parsedMaxAmount !== null) {
+        filter.amount.$lte = parsedMaxAmount;
+      }
+    }
+
+    const normalizedStart = normalizeDate(startDate, false);
+    const normalizedEnd = normalizeDate(endDate, true);
+    if ((startDate && !normalizedStart) || (endDate && !normalizedEnd)) {
+      return res.status(400).json({ code: "TRANSACTION_DATE_INVALID" });
+    }
+    if (normalizedStart || normalizedEnd) {
+      filter.createdAt = {};
+      if (normalizedStart) {
+        filter.createdAt.$gte = normalizedStart;
+      }
+      if (normalizedEnd) {
+        filter.createdAt.$lte = normalizedEnd;
+      }
+    }
+
+    const sortFieldMap = {
+      createdAt: "createdAt",
+      amount: "amount",
+      type: "type",
+    };
+    const resolvedSortField = sortFieldMap[sortBy] || "createdAt";
+    const resolvedSortOrder = sortOrder === "asc" ? 1 : -1;
+
+    const [transactions, total] = await Promise.all([
+      Transaction.find(filter)
+        .sort({ [resolvedSortField]: resolvedSortOrder, _id: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .populate({ path: "userId", select: "name phone" }),
+      Transaction.countDocuments(filter),
+    ]);
+
+    const payload = transactions.map((tx) => {
+      const txObj = tx.toObject();
+      const user =
+        txObj.userId && typeof txObj.userId === "object" ? txObj.userId : null;
+      return {
+        ...txObj,
+        user,
+        userId: user?._id ?? txObj.userId,
+      };
+    });
+
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    return res.status(200).json({
+      transactions: payload,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasMore: page < totalPages,
+      },
+    });
+  } catch (err) {
+    return handleError(err, res);
+  }
+};
+
+export const deleteAdminTransactions = async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const normalizedIds = [
+      ...new Set(ids.map((id) => String(id).trim())),
+    ].filter(Boolean);
+
+    if (normalizedIds.length === 0) {
+      return res.status(400).json({ code: "TRANSACTION_IDS_REQUIRED" });
+    }
+
+    const invalidIds = normalizedIds.filter(
+      (id) => !mongoose.Types.ObjectId.isValid(id),
+    );
+    if (invalidIds.length) {
+      return res.status(400).json({ code: "TRANSACTION_ID_INVALID" });
+    }
+
+    const result = await Transaction.deleteMany({
+      _id: { $in: normalizedIds },
+    });
+
+    return res.status(200).json({
+      deleted: result.deletedCount || 0,
+    });
   } catch (err) {
     return handleError(err, res);
   }

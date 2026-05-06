@@ -7,6 +7,8 @@ import Home from "pages/home";
 import Login from "pages/login";
 import NotFound from "pages/NotFound";
 import Users from "pages/users";
+import Orders from "pages/orders";
+import Transactions from "pages/transactions";
 
 import PopupMessage from "components/popup-message";
 import { DialogProvider } from "components/dialog/DialogContext";
@@ -67,6 +69,22 @@ const App = () => {
                     path="/cards"
                     element={
                       isLoggedin ? <Cards /> : <Navigate to="/login" replace />
+                    }
+                  />
+                  <Route
+                    path="/orders"
+                    element={
+                      isLoggedin ? <Orders /> : <Navigate to="/login" replace />
+                    }
+                  />
+                  <Route
+                    path="/transactions"
+                    element={
+                      isLoggedin ? (
+                        <Transactions />
+                      ) : (
+                        <Navigate to="/login" replace />
+                      )
                     }
                   />
                   <Route
