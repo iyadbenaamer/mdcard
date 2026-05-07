@@ -32,6 +32,34 @@ const generateRandomSerialNumber = () => {
 const hashCardCode = (value) =>
   crypto.createHash("sha256").update(value).digest("hex");
 
+const normalizeOptionalString = (value) => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null) {
+    return null;
+  }
+
+  const nextValue = String(value).trim();
+  return nextValue ? nextValue : null;
+};
+
+const normalizeOptionalDate = (value) => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null || value === "") {
+    return null;
+  }
+
+  const parsedDate = new Date(value);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return { error: true };
+  }
+
+  return parsedDate;
+};
+
 const parseExcelCodes = async (filePath) => {
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(filePath);
@@ -119,6 +147,16 @@ const createExternalCardDocument = async ({
   }
 
   const externalSerialNumber = bambooCard?.serialNumber?.trim() || null;
+  const externalPin =
+    bambooCard?.pin === undefined || bambooCard?.pin === null
+      ? null
+      : String(bambooCard.pin).trim() || null;
+  const externalExpiryDate = normalizeOptionalDate(bambooCard?.expiryDate);
+  if (externalExpiryDate && externalExpiryDate.error) {
+    throw Object.assign(new Error("BAMBOO_EXPIRY_DATE_INVALID"), {
+      code: "BAMBOO_EXPIRY_DATE_INVALID",
+    });
+  }
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const cardPayload = {
@@ -126,6 +164,8 @@ const createExternalCardDocument = async ({
       serialNumber: generateRandomSerialNumber(),
       code: encryptCardCode(code),
       codeHash,
+      pin: externalPin,
+      expiryDate: externalExpiryDate,
       provider: "bamboo",
       externalSerialNumber,
       externalOrderId: bambooOrderId ?? null,
@@ -335,7 +375,16 @@ export const getOne = async (req, res) => {
 export const updateOne = async (req, res) => {
   try {
     const { id } = req.query;
-    let { tierId, serialNumber, code, status, soldTo, soldAt } = req.body;
+    let {
+      tierId,
+      serialNumber,
+      code,
+      pin,
+      expiryDate,
+      status,
+      soldTo,
+      soldAt,
+    } = req.body;
 
     const card = await Card.findById(id);
     if (!card) {
@@ -397,6 +446,18 @@ export const updateOne = async (req, res) => {
       card.codeHash = codeHash;
     }
 
+    if (pin !== undefined) {
+      card.pin = normalizeOptionalString(pin);
+    }
+
+    if (expiryDate !== undefined) {
+      const parsedExpiryDate = normalizeOptionalDate(expiryDate);
+      if (parsedExpiryDate && parsedExpiryDate.error) {
+        return res.status(400).json({ code: "CARD_EXPIRY_DATE_INVALID" });
+      }
+      card.expiryDate = parsedExpiryDate;
+    }
+
     if (tierId !== undefined && code === undefined && card.codeHash) {
       const targetTier = await resolveTargetTier();
       if (!targetTier) {
@@ -449,7 +510,16 @@ export const updateOne = async (req, res) => {
 
 export const createOne = async (req, res) => {
   try {
-    let { tierId, serialNumber, code, status, soldTo, soldAt } = req.body;
+    let {
+      tierId,
+      serialNumber,
+      code,
+      pin,
+      expiryDate,
+      status,
+      soldTo,
+      soldAt,
+    } = req.body;
 
     if (!tierId || !code) {
       return res.status(400).json({ code: "CARD_REQUIRED_FIELDS_MISSING" });
@@ -477,6 +547,12 @@ export const createOne = async (req, res) => {
     code = code?.trim();
     if (!code) {
       return res.status(400).json({ code: "CARD_CODE_REQUIRED" });
+    }
+
+    pin = normalizeOptionalString(pin);
+    const normalizedExpiryDate = normalizeOptionalDate(expiryDate);
+    if (normalizedExpiryDate && normalizedExpiryDate.error) {
+      return res.status(400).json({ code: "CARD_EXPIRY_DATE_INVALID" });
     }
 
     const codeHash = hashCardCode(code);
@@ -525,6 +601,8 @@ export const createOne = async (req, res) => {
         serialNumber: nextSerial,
         code: encryptCardCode(code),
         codeHash,
+        pin,
+        expiryDate: normalizedExpiryDate,
         status,
         soldTo,
         soldAt,

@@ -154,12 +154,24 @@ const normalizeCard = (entry) => {
     "referenceNumber",
   ]);
   const externalCardId = pickFirst(nested, ["id", "cardId", "referenceId"]);
+  const pin = pickFirst(nested, ["pin", "cardPin", "securityPin"]);
+  const expiryDate = pickFirst(nested, [
+    "expiryDate",
+    "expirationDate",
+    "expiresAt",
+    "validUntil",
+    "expiry",
+    "expiration",
+    "dateExpiry",
+  ]);
 
   return {
     code: code === undefined ? null : String(code),
     serialNumber: serialNumber === undefined ? null : String(serialNumber),
     externalCardId:
       externalCardId === undefined ? null : String(externalCardId),
+    pin: pin === undefined ? null : String(pin),
+    expiryDate: expiryDate === undefined ? null : String(expiryDate),
     status: pickFirst(nested, ["status", "state"]) ?? null,
     raw: nested,
   };

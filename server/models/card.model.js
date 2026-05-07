@@ -8,6 +8,8 @@ const cardSchema = new Schema(
     serialNumber: { type: String, required: true, unique: true },
     code: { type: String, required: true }, // encrypted in production
     codeHash: { type: String, index: true },
+    pin: { type: String, default: null },
+    expiryDate: { type: Date, default: null },
     provider: {
       type: String,
       enum: ["local", "bamboo"],

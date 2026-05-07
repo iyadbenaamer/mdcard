@@ -28,9 +28,12 @@ const CardType = () => {
   const [categories, setCategories] = useState([]);
   const [cardTypeImage, setCardTypeImage] = useState("");
   const [cardTypePrintImage, setCardTypePrintImage] = useState("");
+  const [cardTypeShowExpiryDateDay, setCardTypeShowExpiryDateDay] =
+    useState(true);
   const [cardTypeIsActive, setCardTypeIsActive] = useState(true);
   const [cardTypeFulfillmentSource, setCardTypeFulfillmentSource] =
     useState("local");
+  const [cardTypeNotes, setCardTypeNotes] = useState("");
   const [draftImageFile, setDraftImageFile] = useState(null);
   const [draftPrintImageFile, setDraftPrintImageFile] = useState(null);
   const [redeemFormat, setRedeemFormat] = useState("");
@@ -58,9 +61,11 @@ const CardType = () => {
       setDraftCategoryId(data.categoryId ?? "");
       setCardTypeImage(data.image ?? "");
       setCardTypePrintImage(data.printImage ?? "");
+      setCardTypeShowExpiryDateDay(data.showExpiryDateDay ?? true);
       setRedeemFormat(data.redeemFormat ?? "");
       setCardTypeIsActive(data.isActive ?? true);
       setCardTypeFulfillmentSource(data.fulfillmentSource ?? "local");
+      setCardTypeNotes(data.notes ?? "");
 
       // Update breadcrumb if we have the name
       setLevels((prev) => {
@@ -225,6 +230,8 @@ const CardType = () => {
       formData.append("isActive", String(cardTypeIsActive));
       formData.append("redeemFormat", (redeemFormat || "").trim());
       formData.append("fulfillmentSource", cardTypeFulfillmentSource);
+      formData.append("showExpiryDateDay", String(cardTypeShowExpiryDateDay));
+      formData.append("notes", (cardTypeNotes || "").trim());
       if (draftImageFile) {
         formData.append("media", draftImageFile);
       }
@@ -703,6 +710,26 @@ const CardType = () => {
                 )}
               </div>
 
+              {/* Notes Field */}
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-500">
+                  ملاحظات (اختياري)
+                </label>
+                {isEditing ? (
+                  <textarea
+                    value={cardTypeNotes}
+                    onChange={(e) => setCardTypeNotes(e.target.value)}
+                    placeholder="أضف ملاحظات عن نوع البطاقة..."
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:border-slate-400 focus:outline-none focus:ring-1 focus:ring-slate-400"
+                    rows="3"
+                  />
+                ) : (
+                  <div className="text-sm text-slate-700">
+                    {cardTypeNotes || <span className="text-slate-400">-</span>}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-slate-500">
                   المصدر
@@ -721,6 +748,29 @@ const CardType = () => {
                 ) : (
                   <div className="text-sm text-slate-700">
                     {cardTypeFulfillmentSource === "bamboo" ? "Bamboo" : "محلي"}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-500">
+                  تاريخ انتهاء الصلاحية
+                </label>
+                {isEditing ? (
+                  <label className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={cardTypeShowExpiryDateDay}
+                      onChange={(event) =>
+                        setCardTypeShowExpiryDateDay(event.target.checked)
+                      }
+                      className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400"
+                    />
+                    <span>إظهار اليوم في تاريخ انتهاء الصلاحية</span>
+                  </label>
+                ) : (
+                  <div className="text-sm text-slate-700">
+                    {cardTypeShowExpiryDateDay ? "يظهر اليوم" : "شهر/سنة فقط"}
                   </div>
                 )}
               </div>

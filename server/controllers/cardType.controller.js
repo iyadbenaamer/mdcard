@@ -15,6 +15,9 @@ import parsePagination from "../utils/parsePagination.js";
 const normalizeFulfillmentSource = (value) =>
   value === "bamboo" ? "bamboo" : "local";
 
+const normalizeBoolean = (value) =>
+  value === "true" ? true : value === "false" ? false : value;
+
 export const getPaginated = async (req, res) => {
   try {
     const { isActive } = req.query;
@@ -303,11 +306,20 @@ export const getOne = async (req, res) => {
 
 export const createOne = async (req, res) => {
   try {
-    let { name, isActive, categoryId, order, fulfillmentSource } = req.body;
+    let {
+      name,
+      isActive,
+      categoryId,
+      order,
+      fulfillmentSource,
+      showExpiryDateDay,
+      notes,
+    } = req.body;
     const image = req.filePath;
     const printImage = req.printFilePath ?? req.body.printImage;
     const redeemFormat = req.body.redeemFormat?.trim();
     name = name?.trim();
+    notes = notes?.trim();
     if (!name) {
       return res.status(400).json({ code: "CARD_TYPE_NAME_REQUIRED" });
     }
@@ -322,6 +334,7 @@ export const createOne = async (req, res) => {
     }
 
     const nextFulfillmentSource = normalizeFulfillmentSource(fulfillmentSource);
+    const normalizedShowExpiryDateDay = normalizeBoolean(showExpiryDateDay);
 
     let nextOrder;
     if (order !== undefined) {
@@ -348,6 +361,11 @@ export const createOne = async (req, res) => {
       image,
       printImage,
       redeemFormat,
+      showExpiryDateDay:
+        typeof normalizedShowExpiryDateDay === "boolean"
+          ? normalizedShowExpiryDateDay
+          : undefined,
+      notes: notes || undefined,
       order: nextOrder,
       isActive:
         typeof normalizedIsActive === "boolean"
@@ -365,7 +383,14 @@ export const createOne = async (req, res) => {
 export const updateOne = async (req, res) => {
   try {
     const { id } = req.query;
-    let { name, categoryId, isActive, fulfillmentSource } = req.body;
+    let {
+      name,
+      categoryId,
+      isActive,
+      fulfillmentSource,
+      showExpiryDateDay,
+      notes,
+    } = req.body;
     const image = req.filePath ?? req.body.image;
     const printImage = req.printFilePath ?? req.body.printImage;
     const redeemFormat = req.body.redeemFormat;
@@ -402,6 +427,11 @@ export const updateOne = async (req, res) => {
       cardType.fulfillmentSource = nextFulfillmentSource;
     }
 
+    const normalizedShowExpiryDateDay = normalizeBoolean(showExpiryDateDay);
+    if (typeof normalizedShowExpiryDateDay === "boolean") {
+      cardType.showExpiryDateDay = normalizedShowExpiryDateDay;
+    }
+
     if (image !== undefined) {
       // If updating image, delete the old one if it exists and is different
       if (cardType.image && cardType.image !== image) {
@@ -425,6 +455,10 @@ export const updateOne = async (req, res) => {
 
     if (redeemFormat !== undefined) {
       cardType.redeemFormat = redeemFormat?.trim() || "";
+    }
+
+    if (notes !== undefined) {
+      cardType.notes = notes?.trim() || undefined;
     }
 
     const normalizedIsActive =

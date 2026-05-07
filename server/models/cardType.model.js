@@ -19,6 +19,10 @@ const cardTypeSchema = new Schema(
     redeemFormat: String,
     // Optional image URL or storage path to print on the card (can be an asset module, URL or data URI)
     printImage: { type: String },
+    // Controls whether printable expiry dates include the day component
+    showExpiryDateDay: { type: Boolean, default: true },
+    // Notes or description for this card type
+    notes: { type: String },
     order: { type: Number, default: 0 },
     image: { type: String },
     isActive: { type: Boolean, default: true },

@@ -106,7 +106,7 @@ const CardTier = () => {
       .match(/.{1,4}/g);
     if (!groups) return "-";
     return (
-      <span className="inline-flex gap-1">
+      <span dir="ltr" className="inline-flex gap-1">
         {groups.map((group, index) => (
           <span key={`${group}-${index}`}>{group}</span>
         ))}
@@ -131,6 +131,8 @@ const CardTier = () => {
         return "الكود مطلوب.";
       case "CARD_CODE_DUPLICATE":
         return "لا يمكن تكرار الكود لنفس النوع.";
+      case "CARD_EXPIRY_DATE_INVALID":
+        return "تاريخ انتهاء الصلاحية غير صالح.";
       case "CARD_STATUS_INVALID":
         return "حالة البطاقة غير صالحة.";
       default:
@@ -404,6 +406,8 @@ const CardTier = () => {
   const CreateCardDialog = ({ onCreate, onCancel }) => {
     const [serialNumber, setSerialNumber] = useState("");
     const [code, setCode] = useState("");
+    const [pin, setPin] = useState("");
+    const [expiryDate, setExpiryDate] = useState("");
     const [dialogError, setDialogError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -423,6 +427,18 @@ const CardTier = () => {
             label="الكود"
             value={code}
             onChange={(event) => setCode(event.target.value)}
+          />
+          <CustomInput
+            label="PIN (اختياري)"
+            value={pin}
+            onChange={(event) => setPin(event.target.value)}
+          />
+          <CustomInput
+            label="تاريخ انتهاء الصلاحية (اختياري)"
+            type="date"
+            value={expiryDate}
+            onChange={(event) => setExpiryDate(event.target.value)}
+            dir="ltr"
           />
         </div>
         {dialogError && (
@@ -446,6 +462,8 @@ const CardTier = () => {
               const result = await onCreate({
                 serialNumber,
                 code,
+                pin,
+                expiryDate,
               });
               if (result?.ok) {
                 onCancel();
@@ -466,6 +484,10 @@ const CardTier = () => {
   const EditCardDialog = ({ card, onSave, onCancel }) => {
     const [serialNumber, setSerialNumber] = useState(card?.serialNumber ?? "");
     const [code, setCode] = useState(card?.code ?? "");
+    const [pin, setPin] = useState(card?.pin ?? "");
+    const [expiryDate, setExpiryDate] = useState(
+      card?.expiryDate ? String(card.expiryDate).slice(0, 10) : "",
+    );
     const [status, setStatus] = useState(card?.status ?? "available");
     const [dialogError, setDialogError] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -485,6 +507,18 @@ const CardTier = () => {
             label="الكود"
             value={code}
             onChange={(event) => setCode(event.target.value)}
+          />
+          <CustomInput
+            label="PIN (اختياري)"
+            value={pin}
+            onChange={(event) => setPin(event.target.value)}
+          />
+          <CustomInput
+            label="تاريخ انتهاء الصلاحية (اختياري)"
+            type="date"
+            value={expiryDate}
+            onChange={(event) => setExpiryDate(event.target.value)}
+            dir="ltr"
           />
           <label className="flex flex-col gap-2 text-sm text-slate-600">
             <span>الحالة</span>
@@ -519,6 +553,8 @@ const CardTier = () => {
               const result = await onSave({
                 serialNumber,
                 code,
+                pin,
+                expiryDate,
                 status,
               });
               if (result?.ok) {
@@ -727,6 +763,8 @@ const CardTier = () => {
         const body = {
           serialNumber: payload.serialNumber?.trim(),
           code: payload.code?.trim(),
+          pin: payload.pin?.trim() || null,
+          expiryDate: payload.expiryDate || null,
           status: payload.status,
         };
 
@@ -779,7 +817,7 @@ const CardTier = () => {
   );
 
   const handleCreateCard = useCallback(
-    async ({ serialNumber, code }) => {
+    async ({ serialNumber, code, pin, expiryDate }) => {
       if (!cardTierId) {
         return { ok: false, error: "تعذر تحديد فئة البطاقة." };
       }
@@ -793,6 +831,8 @@ const CardTier = () => {
       const payload = {
         tierId: cardTierId,
         code: code.trim(),
+        pin: pin?.trim() || null,
+        expiryDate: expiryDate || null,
       };
 
       if (serialNumber?.trim()) {
