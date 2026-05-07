@@ -41,11 +41,14 @@ export const getPaginated = async (req, res) => {
       filter.isActive = false;
     }
 
-    const tiers = await CardTier.find(filter)
-      .sort({ order: 1, createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
+    // When requesting tiers for a specific type (typeId), return the
+    // full ordered list for that type (no pagination). For general
+    // queries (no typeId) keep pagination to avoid large responses.
+    let tiersQuery = CardTier.find(filter).sort({ order: 1, createdAt: -1 });
+    if (!typeId) {
+      tiersQuery = tiersQuery.skip((page - 1) * limit).limit(limit);
+    }
+    const tiers = await tiersQuery.lean();
 
     if (!req.admin && req.user && tiers.length) {
       const tierIds = tiers.map((tier) => tier._id);
