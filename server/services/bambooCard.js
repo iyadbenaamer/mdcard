@@ -362,11 +362,15 @@ export const placeAndResolveBambooOrder = async ({
   const requestedQuantity = Math.max(1, Number(quantity) || 1);
   const pollAttempts = Math.max(
     1,
-    Number(process.env.BAMBOO_ORDER_POLL_ATTEMPTS || 3),
+    Number(process.env.BAMBOO_ORDER_POLL_ATTEMPTS || 10),
   );
   const pollIntervalMs = Math.max(
     0,
-    Number(process.env.BAMBOO_ORDER_POLL_INTERVAL_MS || 1000),
+    Number(process.env.BAMBOO_ORDER_POLL_INTERVAL_MS || 1500),
+  );
+  const backoffFactor = Math.max(
+    1,
+    Number(process.env.BAMBOO_ORDER_POLL_BACKOFF || 1.5),
   );
 
   let latest = await placeBambooOrder({
@@ -392,8 +396,9 @@ export const placeAndResolveBambooOrder = async ({
   }
 
   for (let attempt = 0; attempt < pollAttempts; attempt += 1) {
-    if (pollIntervalMs > 0) {
-      await sleep(pollIntervalMs);
+    const delay = Math.round(pollIntervalMs * Math.pow(backoffFactor, attempt));
+    if (delay > 0) {
+      await sleep(delay);
     }
 
     latest = await getBambooOrder(orderId);
