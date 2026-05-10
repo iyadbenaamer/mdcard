@@ -45,6 +45,9 @@ export const getPaginated = async (req, res) => {
 export const getByCategory = async (req, res) => {
   try {
     const { isActive, categoryId } = req.query;
+    const isLimited = req.query.limit !== undefined;
+    const isPaginated =
+      req.query.page !== undefined && req.query.limit !== undefined;
     const { page, limit } = parsePagination(req.query.page, req.query.limit);
 
     if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
@@ -89,8 +92,10 @@ export const getByCategory = async (req, res) => {
       },
       { $replaceRoot: { newRoot: "$types" } },
       { $sort: { order: 1, createdAt: -1 } },
-      { $skip: (page - 1) * limit },
-      { $limit: limit },
+      ...(isPaginated
+        ? [{ $skip: (page - 1) * limit }, { $limit: limit }]
+        : []),
+      ...(!isPaginated && isLimited ? [{ $limit: limit }] : []),
     ]);
     return res.status(200).json({
       name: category.name,

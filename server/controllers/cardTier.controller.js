@@ -10,6 +10,9 @@ import parsePagination from "../utils/parsePagination.js";
 export const getPaginated = async (req, res) => {
   try {
     const { isActive, typeId } = req.query;
+    const isLimited = req.query.limit !== undefined;
+    const isPaginated =
+      req.query.page !== undefined && req.query.limit !== undefined;
     const { page, limit } = parsePagination(req.query.page, req.query.limit);
 
     let typeName = "";
@@ -41,12 +44,11 @@ export const getPaginated = async (req, res) => {
       filter.isActive = false;
     }
 
-    // When requesting tiers for a specific type (typeId), return the
-    // full ordered list for that type (no pagination). For general
-    // queries (no typeId) keep pagination to avoid large responses.
     let tiersQuery = CardTier.find(filter).sort({ order: 1, createdAt: -1 });
-    if (!typeId) {
+    if (isPaginated) {
       tiersQuery = tiersQuery.skip((page - 1) * limit).limit(limit);
+    } else if (isLimited) {
+      tiersQuery = tiersQuery.limit(limit);
     }
     const tiers = await tiersQuery.lean();
 
