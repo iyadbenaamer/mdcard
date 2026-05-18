@@ -1,4 +1,5 @@
 import { Schema, model } from "mongoose";
+import { isSandboxMode } from "../utils/sandbox.js";
 
 const userSchema = new Schema(
   {
@@ -15,7 +16,11 @@ const userSchema = new Schema(
       min: 2,
       max: 20,
     },
-    balance: { type: Number, default: 0, min: 0 },
+    balance: {
+      type: Number,
+      default: () => (isSandboxMode() ? 1000 : 0),
+      min: 0,
+    },
     // if the user is verified, they can login and use the app, otherwise they need to verify their account first
     verificationStatus: {
       isVerified: { type: Boolean, default: false },

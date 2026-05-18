@@ -7,6 +7,7 @@ import { generateCode } from "../utils/generateCode.js";
 import { sendCode } from "../services/sendCode.js";
 import { handleError } from "../utils/errorHandler.js";
 import Setting from "../models/setting.model.js";
+import { isSandboxMode } from "../utils/sandbox.js";
 
 const MAX_CODE_ATTEMPTS = 20;
 const RESEND_FIRST_TWO_DELAY_MS = 60 * 1000;
@@ -16,6 +17,7 @@ const CODE_EXPIRATION = process.env.CODE_EXPIRATION || "1h";
 const ACCESS_TOKEN_EXPIRATION = process.env.ACCESS_TOKEN_EXPIRATION || "14d";
 const REMEMBER_ME_ACCESS_EXPIRATION =
   process.env.REMEMBER_ME_ACCESS_EXPIRATION || "90d";
+const isSandbox = isSandboxMode();
 
 const getNextResendAfter = (codesSentCount = 0) => {
   const nextCount = codesSentCount + 1;
@@ -88,14 +90,20 @@ export const signup = async (req, res) => {
       },
     );
     // sends the verification code to the user's phone number
-    await sendCode(phone, verificationCode);
+    if (!isSandbox) {
+      await sendCode(phone, verificationCode);
+    }
     newUser.verificationStatus.token = verificationToken;
     newUser.verificationStatus.remainingAttempts = MAX_CODE_ATTEMPTS;
     newUser.verificationStatus.codesSentCount = 1;
     newUser.verificationStatus.resendAfter = getNextResendAfter(0);
     await newUser.save();
 
-    return res.status(201).json({ code: "AUTH_USER_CREATED" });
+    const responsePayload = { code: "AUTH_USER_CREATED" };
+    if (isSandbox) {
+      responsePayload.verificationCode = verificationCode;
+    }
+    return res.status(201).json(responsePayload);
   } catch (err) {
     return handleError(err, res);
   }
@@ -179,7 +187,9 @@ export const login = async (req, res) => {
         },
       );
       // send phone with verification code if the phone isn't verified
-      await sendCode(phone, verificationCode);
+      if (!isSandbox) {
+        await sendCode(phone, verificationCode);
+      }
       console.log(verificationCode);
       user.verificationStatus.token = verificationToken;
       user.verificationStatus.remainingAttempts = MAX_CODE_ATTEMPTS;
@@ -189,10 +199,14 @@ export const login = async (req, res) => {
         user.verificationStatus.codesSentCount - 1,
       );
       await user.save();
-      return res.status(401).json({
+      const responsePayload = {
         isVerified,
         code: "AUTH_VERIFICATION_REQUIRED",
-      });
+      };
+      if (isSandbox) {
+        responsePayload.verificationCode = verificationCode;
+      }
+      return res.status(401).json(responsePayload);
     }
     /*
     if the phone is verified and it's correct as well as the password,
@@ -354,7 +368,9 @@ export const sendVerificationCode = async (req, res) => {
         });
       }
 
-      await sendCode(phone, verificationCode);
+      if (!isSandbox) {
+        await sendCode(phone, verificationCode);
+      }
       user.resetPassword.token = token;
       user.resetPassword.remainingAttempts = MAX_CODE_ATTEMPTS;
       user.resetPassword.codesSentCount =
@@ -363,7 +379,11 @@ export const sendVerificationCode = async (req, res) => {
         user.resetPassword.codesSentCount - 1,
       );
       await user.save();
-      return res.status(200).json({ code: "AUTH_RESET_CODE_SENT" });
+      const responsePayload = { code: "AUTH_RESET_CODE_SENT" };
+      if (isSandbox) {
+        responsePayload.verificationCode = verificationCode;
+      }
+      return res.status(200).json(responsePayload);
     } else if (type === "verify_account") {
       if (user.verificationStatus.isVerified) {
         return res.status(400).json({
@@ -379,7 +399,9 @@ export const sendVerificationCode = async (req, res) => {
         });
       }
 
-      await sendCode(phone, verificationCode);
+      if (!isSandbox) {
+        await sendCode(phone, verificationCode);
+      }
       user.verificationStatus.token = token;
       user.verificationStatus.remainingAttempts = MAX_CODE_ATTEMPTS;
       user.verificationStatus.codesSentCount =
@@ -388,7 +410,11 @@ export const sendVerificationCode = async (req, res) => {
         user.verificationStatus.codesSentCount - 1,
       );
       await user.save();
-      return res.status(200).json({ code: "AUTH_VERIFICATION_CODE_SENT" });
+      const responsePayload = { code: "AUTH_VERIFICATION_CODE_SENT" };
+      if (isSandbox) {
+        responsePayload.verificationCode = verificationCode;
+      }
+      return res.status(200).json(responsePayload);
     } else {
       return res.status(400).json({ code: "AUTH_BAD_REQUEST" });
     }

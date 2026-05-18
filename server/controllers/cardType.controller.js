@@ -11,12 +11,15 @@ import { safeDelete } from "../middleware/media.middleware.js";
 import { handleError } from "../utils/errorHandler.js";
 import { getEffectiveBuyPrice } from "../utils/priceCalculator.js";
 import parsePagination from "../utils/parsePagination.js";
+import { isSandboxMode } from "../utils/sandbox.js";
 
 const normalizeFulfillmentSource = (value) =>
   value === "bamboo" ? "bamboo" : "local";
 
 const normalizeBoolean = (value) =>
   value === "true" ? true : value === "false" ? false : value;
+
+const isSandbox = isSandboxMode();
 
 export const getPaginated = async (req, res) => {
   try {
@@ -252,9 +255,15 @@ export const getOne = async (req, res) => {
         $addFields: {
           isAvailable: {
             $cond: [
-              { $eq: ["$$fulfillmentSource", "bamboo"] },
+              { $literal: isSandbox },
               true,
-              { $gt: [{ $size: "$availableCards" }, 0] },
+              {
+                $cond: [
+                  { $eq: ["$$fulfillmentSource", "bamboo"] },
+                  true,
+                  { $gt: [{ $size: "$availableCards" }, 0] },
+                ],
+              },
             ],
           },
         },

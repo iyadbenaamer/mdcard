@@ -17,9 +17,13 @@ import { getEffectiveBuyPrice } from "../utils/priceCalculator.js";
 import parsePagination from "../utils/parsePagination.js";
 import crypto from "crypto";
 import { decryptCardCode, encryptCardCode } from "../utils/cardCodeCrypto.js";
+import { isSandboxMode } from "../utils/sandbox.js";
 
 const SERIAL_LENGTH = 15;
 const SERIAL_MODULO = 10n ** BigInt(SERIAL_LENGTH);
+const SANDBOX_CARD_CODE_LENGTH = 12;
+const SANDBOX_TOPUP_AMOUNT = 1000;
+const isSandbox = isSandboxMode();
 
 const isValidSerialNumber = (value) => /^\d{15}$/.test(value);
 
@@ -31,6 +35,20 @@ const generateRandomSerialNumber = () => {
 
 const hashCardCode = (value) =>
   crypto.createHash("sha256").update(value).digest("hex");
+
+const generateSandboxCardCode = () => {
+  let code = "";
+  while (code.length < SANDBOX_CARD_CODE_LENGTH) {
+    const bytes = crypto.randomBytes(SANDBOX_CARD_CODE_LENGTH);
+    for (const byte of bytes) {
+      if (code.length >= SANDBOX_CARD_CODE_LENGTH) {
+        break;
+      }
+      code += (byte % 10).toString();
+    }
+  }
+  return code;
+};
 
 const normalizeOptionalString = (value) => {
   if (value === undefined) {
@@ -117,6 +135,52 @@ const findDuplicateCodeInType = async (tierId, codeHash, excludeCardId) => {
     ...(excludeCardId ? { _id: { $ne: excludeCardId } } : {}),
     tierId: { $in: relatedTierIds.map((item) => item._id) },
     codeHash,
+  });
+};
+
+const createSandboxCardDocument = async ({ tierId, userId, provider }) => {
+  if (!userId) {
+    throw Object.assign(new Error("CARD_SOLD_USER_REQUIRED"), {
+      code: "CARD_SOLD_USER_REQUIRED",
+    });
+  }
+
+  const resolvedProvider = provider === "bamboo" ? "bamboo" : "local";
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const code = generateSandboxCardCode();
+    const codeHash = hashCardCode(code);
+    const duplicate = await findDuplicateCodeInType(tierId, codeHash);
+    if (duplicate) {
+      continue;
+    }
+
+    for (let serialAttempt = 0; serialAttempt < 5; serialAttempt += 1) {
+      const card = new Card({
+        tierId,
+        serialNumber: generateRandomSerialNumber(),
+        code: encryptCardCode(code),
+        codeHash,
+        provider: resolvedProvider,
+        status: "sold",
+        soldTo: userId,
+        soldAt: new Date(),
+      });
+
+      try {
+        await card.save();
+        return card;
+      } catch (err) {
+        if (err?.code === 11000) {
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+
+  throw Object.assign(new Error("CARD_SANDBOX_CREATE_FAILED"), {
+    code: "CARD_SANDBOX_CREATE_FAILED",
   });
 };
 
@@ -739,18 +803,35 @@ export const importFromExcel = async (req, res) => {
 export const checkoutCart = async (req, res) => {
   const reservedCardIds = [];
   const reservedCards = [];
+  const sandboxCreatedIdSet = new Set();
 
   const trackReserved = (cards) => {
     for (const card of cards) {
-      reservedCardIds.push(card._id);
+      const cardId = card._id;
+      reservedCardIds.push(cardId);
       reservedCards.push(card);
+      if (isSandbox) {
+        sandboxCreatedIdSet.add(String(cardId));
+      }
     }
   };
 
   const releaseReservedCards = async () => {
     if (reservedCardIds.length === 0) return;
+
+    if (isSandbox && sandboxCreatedIdSet.size > 0) {
+      await Card.deleteMany({
+        _id: { $in: [...sandboxCreatedIdSet] },
+      });
+    }
+
+    const remainingIds = reservedCardIds.filter(
+      (id) => !sandboxCreatedIdSet.has(String(id)),
+    );
+    if (remainingIds.length === 0) return;
+
     await Card.updateMany(
-      { _id: { $in: reservedCardIds } },
+      { _id: { $in: remainingIds } },
       { status: "available", soldTo: null, soldAt: null },
     );
   };
@@ -822,7 +903,7 @@ export const checkoutCart = async (req, res) => {
       }
 
       const fulfillmentSource = tier.typeId?.fulfillmentSource || "local";
-      if (fulfillmentSource === "local") {
+      if (fulfillmentSource === "local" && !isSandbox) {
         const localAvailable = await Card.countDocuments({
           tierId,
           status: "available",
@@ -880,6 +961,21 @@ export const checkoutCart = async (req, res) => {
 
     // Step 2: ensure user balance covers the full checkout
     if (user.balance < totalCost) {
+      if (isSandbox) {
+        const balanceBefore = roundToCents(user.balance);
+        const balanceAfter = roundToCents(balanceBefore + SANDBOX_TOPUP_AMOUNT);
+        user.balance = balanceAfter;
+        await user.save();
+
+        const deposit = new Transaction({
+          userId: user._id,
+          type: "deposit",
+          amount: SANDBOX_TOPUP_AMOUNT,
+          balanceBefore,
+          balanceAfter,
+        });
+        await deposit.save();
+      }
       return res.status(400).json({ code: "USER_BALANCE_INSUFFICIENT" });
     }
 
@@ -905,174 +1001,199 @@ export const checkoutCart = async (req, res) => {
     const orderItems = [];
     const failureDetails = [];
 
-    // Step 3: reserve local-only items (must fully succeed or cancel)
-    for (const item of requestedItems.filter(
-      (entry) => entry.fulfillmentSource === "local",
-    )) {
-      const reserved = await reserveLocalCards(item.tierId, item.requested);
-      trackReserved(reserved);
+    if (isSandbox) {
+      for (const item of requestedItems) {
+        const createdCards = [];
+        for (let i = 0; i < item.requested; i += 1) {
+          const createdCard = await createSandboxCardDocument({
+            tierId: item.tierId,
+            userId: user._id,
+            provider: item.fulfillmentSource,
+          });
+          createdCards.push(createdCard);
+          trackReserved([createdCard]);
+        }
 
-      if (reserved.length < item.requested) {
-        failureDetails.push({
+        orderItems.push({
           tierId: item.tierId,
-          requested: item.requested,
-          available: reserved.length,
-          provider: "local",
-          code: "LOCAL_OUT_OF_STOCK",
+          title: item.tierTitle,
+          price: item.buyPrice,
+          quantity: item.requested,
+          provider: item.fulfillmentSource === "bamboo" ? "bamboo" : "local",
+          externalOrderId: null,
+          cards: createdCards.map((card) => card._id),
         });
-        return await cancelCheckout(failureDetails);
+      }
+    } else {
+      // Step 3: reserve local-only items (must fully succeed or cancel)
+      for (const item of requestedItems.filter(
+        (entry) => entry.fulfillmentSource === "local",
+      )) {
+        const reserved = await reserveLocalCards(item.tierId, item.requested);
+        trackReserved(reserved);
+
+        if (reserved.length < item.requested) {
+          failureDetails.push({
+            tierId: item.tierId,
+            requested: item.requested,
+            available: reserved.length,
+            provider: "local",
+            code: "LOCAL_OUT_OF_STOCK",
+          });
+          return await cancelCheckout(failureDetails);
+        }
+
+        orderItems.push({
+          tierId: item.tierId,
+          title: item.tierTitle,
+          price: item.buyPrice,
+          quantity: item.requested,
+          provider: "local",
+          externalOrderId: null,
+          cards: reserved.map((card) => card._id),
+        });
       }
 
-      orderItems.push({
-        tierId: item.tierId,
-        title: item.tierTitle,
-        price: item.buyPrice,
-        quantity: item.requested,
-        provider: "local",
-        externalOrderId: null,
-        cards: reserved.map((card) => card._id),
-      });
-    }
+      // Step 4: handle bamboo items (use local inventory first, then Bamboo API)
+      for (const item of requestedItems.filter(
+        (entry) => entry.fulfillmentSource === "bamboo",
+      )) {
+        const localReserved = await reserveLocalCards(
+          item.tierId,
+          item.requested,
+        );
+        trackReserved(localReserved);
 
-    // Step 4: handle bamboo items (use local inventory first, then Bamboo API)
-    for (const item of requestedItems.filter(
-      (entry) => entry.fulfillmentSource === "bamboo",
-    )) {
-      const localReserved = await reserveLocalCards(
-        item.tierId,
-        item.requested,
-      );
-      trackReserved(localReserved);
+        const remainingRequested = item.requested - localReserved.length;
+        let externalOrderId = null;
+        const bambooCreated = [];
 
-      const remainingRequested = item.requested - localReserved.length;
-      let externalOrderId = null;
-      const bambooCreated = [];
-
-      if (remainingRequested > 0) {
-        if (!item.bambooProductId) {
-          failureDetails.push({
-            tierId: item.tierId,
-            requested: remainingRequested,
-            available: 0,
-            provider: "bamboo",
-            code: "BAMBOO_PRODUCT_MISSING",
-          });
-          return await cancelCheckout(failureDetails);
-        }
-        if (
-          item.bambooValue === null ||
-          item.bambooValue === undefined ||
-          Number.isNaN(Number(item.bambooValue))
-        ) {
-          failureDetails.push({
-            tierId: item.tierId,
-            requested: remainingRequested,
-            available: 0,
-            provider: "bamboo",
-            code: "BAMBOO_VALUE_INVALID",
-          });
-          return await cancelCheckout(failureDetails);
-        }
-
-        let bambooOrder;
-        try {
-          // Bamboo sequence: POST orders/checkout then GET orders/:id for cards.
-          bambooOrder = await placeAndResolveBambooOrder({
-            productId: item.bambooProductId,
-            value: item.bambooValue,
-            quantity: remainingRequested,
-            reference: `${user._id}:${item.tierId}:${Date.now()}`,
-            metadata: {
-              userId: user._id.toString(),
-              tierId: item.tierId.toString(),
-              tierTitle: item.tierTitle,
-            },
-          });
-        } catch (err) {
-          if (err?.code === "BAMBOO_OUT_OF_STOCK") {
+        if (remainingRequested > 0) {
+          if (!item.bambooProductId) {
             failureDetails.push({
               tierId: item.tierId,
               requested: remainingRequested,
-              available: Number(err.available ?? 0),
+              available: 0,
               provider: "bamboo",
-              code: "BAMBOO_OUT_OF_STOCK",
-              message: err.providerMessage || null,
+              code: "BAMBOO_PRODUCT_MISSING",
             });
             return await cancelCheckout(failureDetails);
           }
-          throw err;
+          if (
+            item.bambooValue === null ||
+            item.bambooValue === undefined ||
+            Number.isNaN(Number(item.bambooValue))
+          ) {
+            failureDetails.push({
+              tierId: item.tierId,
+              requested: remainingRequested,
+              available: 0,
+              provider: "bamboo",
+              code: "BAMBOO_VALUE_INVALID",
+            });
+            return await cancelCheckout(failureDetails);
+          }
+
+          let bambooOrder;
+          try {
+            // Bamboo sequence: POST orders/checkout then GET orders/:id for cards.
+            bambooOrder = await placeAndResolveBambooOrder({
+              productId: item.bambooProductId,
+              value: item.bambooValue,
+              quantity: remainingRequested,
+              reference: `${user._id}:${item.tierId}:${Date.now()}`,
+              metadata: {
+                userId: user._id.toString(),
+                tierId: item.tierId.toString(),
+                tierTitle: item.tierTitle,
+              },
+            });
+          } catch (err) {
+            if (err?.code === "BAMBOO_OUT_OF_STOCK") {
+              failureDetails.push({
+                tierId: item.tierId,
+                requested: remainingRequested,
+                available: Number(err.available ?? 0),
+                provider: "bamboo",
+                code: "BAMBOO_OUT_OF_STOCK",
+                message: err.providerMessage || null,
+              });
+              return await cancelCheckout(failureDetails);
+            }
+            throw err;
+          }
+
+          externalOrderId =
+            bambooOrder?.orderId || bambooOrder?.requestId || null;
+
+          const bambooCards = Array.isArray(bambooOrder?.cards)
+            ? bambooOrder.cards.slice(0, remainingRequested)
+            : [];
+          if (bambooCards.length < remainingRequested) {
+            failureDetails.push({
+              tierId: item.tierId,
+              requested: remainingRequested,
+              available: bambooCards.length,
+              provider: "bamboo",
+              code: "BAMBOO_INCOMPLETE_ORDER",
+            });
+            return await cancelCheckout(failureDetails);
+          }
+
+          try {
+            for (const bambooCard of bambooCards) {
+              const createdCard = await createExternalCardDocument({
+                tierId: item.tierId,
+                userId: user._id,
+                bambooCard,
+                bambooOrderId: externalOrderId,
+              });
+              bambooCreated.push(createdCard);
+              trackReserved([createdCard]);
+            }
+          } catch (err) {
+            failureDetails.push({
+              tierId: item.tierId,
+              requested: remainingRequested,
+              available: 0,
+              provider: "bamboo",
+              code: "BAMBOO_CARD_PERSIST_FAILED",
+            });
+            return await cancelCheckout(failureDetails);
+          }
         }
 
-        externalOrderId =
-          bambooOrder?.orderId || bambooOrder?.requestId || null;
+        const itemCardIds = [
+          ...localReserved.map((card) => card._id),
+          ...bambooCreated.map((card) => card._id),
+        ];
 
-        const bambooCards = Array.isArray(bambooOrder?.cards)
-          ? bambooOrder.cards.slice(0, remainingRequested)
-          : [];
-        if (bambooCards.length < remainingRequested) {
+        if (itemCardIds.length !== item.requested) {
           failureDetails.push({
             tierId: item.tierId,
-            requested: remainingRequested,
-            available: bambooCards.length,
+            requested: item.requested,
+            available: itemCardIds.length,
             provider: "bamboo",
             code: "BAMBOO_INCOMPLETE_ORDER",
           });
           return await cancelCheckout(failureDetails);
         }
 
-        try {
-          for (const bambooCard of bambooCards) {
-            const createdCard = await createExternalCardDocument({
-              tierId: item.tierId,
-              userId: user._id,
-              bambooCard,
-              bambooOrderId: externalOrderId,
-            });
-            bambooCreated.push(createdCard);
-            trackReserved([createdCard]);
-          }
-        } catch (err) {
-          failureDetails.push({
-            tierId: item.tierId,
-            requested: remainingRequested,
-            available: 0,
-            provider: "bamboo",
-            code: "BAMBOO_CARD_PERSIST_FAILED",
-          });
-          return await cancelCheckout(failureDetails);
-        }
-      }
-
-      const itemCardIds = [
-        ...localReserved.map((card) => card._id),
-        ...bambooCreated.map((card) => card._id),
-      ];
-
-      if (itemCardIds.length !== item.requested) {
-        failureDetails.push({
+        orderItems.push({
           tierId: item.tierId,
-          requested: item.requested,
-          available: itemCardIds.length,
-          provider: "bamboo",
-          code: "BAMBOO_INCOMPLETE_ORDER",
+          title: item.tierTitle,
+          price: item.buyPrice,
+          quantity: item.requested,
+          provider:
+            localReserved.length > 0
+              ? bambooCreated.length > 0
+                ? "local"
+                : "local"
+              : "bamboo",
+          externalOrderId,
+          cards: itemCardIds,
         });
-        return await cancelCheckout(failureDetails);
       }
-
-      orderItems.push({
-        tierId: item.tierId,
-        title: item.tierTitle,
-        price: item.buyPrice,
-        quantity: item.requested,
-        provider:
-          localReserved.length > 0
-            ? bambooCreated.length > 0
-              ? "local"
-              : "local"
-            : "bamboo",
-        externalOrderId,
-        cards: itemCardIds,
-      });
     }
 
     // Step 5: finalize checkout (charge balance, create order, record transaction)

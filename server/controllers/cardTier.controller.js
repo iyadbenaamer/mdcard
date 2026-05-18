@@ -6,6 +6,7 @@ import CustomePricing from "../models/customePricing.model.js";
 
 import { handleError } from "../utils/errorHandler.js";
 import parsePagination from "../utils/parsePagination.js";
+import { isSandboxMode } from "../utils/sandbox.js";
 
 export const getPaginated = async (req, res) => {
   try {
@@ -329,7 +330,7 @@ export const checkAvailability = async (req, res) => {
         }
 
         const available =
-          tier.typeId?.fulfillmentSource === "bamboo"
+          isSandboxMode() || tier.typeId?.fulfillmentSource === "bamboo"
             ? requested
             : await Card.countDocuments({
                 tierId,

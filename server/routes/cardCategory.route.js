@@ -7,7 +7,7 @@ import {
   deleteOne,
 } from "../controllers/cardCategory.controller.js";
 
-import { verifyAdmin } from "../middleware/auth.middleware.js";
+import { verifyAdmin, verifyToken } from "../middleware/auth.middleware.js";
 
 const router = Router();
 

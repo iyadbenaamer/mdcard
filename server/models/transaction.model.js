@@ -1,6 +1,8 @@
 import { Schema, model, Types } from "mongoose";
+import { isSandboxMode } from "../utils/sandbox.js";
 
 const { ObjectId } = Types;
+const isSandbox = isSandboxMode();
 
 const transactionSchema = new Schema(
   {
@@ -25,7 +27,7 @@ const transactionSchema = new Schema(
 
 transactionSchema.pre("validate", function () {
   if (this.type === "deposit") {
-    if (!this.createdByAdmin) {
+    if (!this.createdByAdmin && !isSandbox) {
       throw new Error("TRANSACTION_ADMIN_REQUIRED");
     }
     if (this.cardId || this.tierId || this.orderId) {
