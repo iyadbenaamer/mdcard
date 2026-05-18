@@ -21,7 +21,7 @@ import { verifyId } from "../middleware/validate.middleware.js";
 
 const router = Router();
 
-router.get("/", getPaginated);
+router.get("/", verifyToken, getPaginated);
 router.get("/by-category", verifyToken, getByCategory);
 router.post(
   "/",
@@ -34,7 +34,7 @@ router.post(
   uploadSingleFile,
   createOne,
 );
-router.get("/get_one", verifyId, getUserInfo, getOne);
+router.get("/get_one", verifyToken, verifyId, getUserInfo, getOne);
 router.patch(
   "/",
   verifyAdmin,

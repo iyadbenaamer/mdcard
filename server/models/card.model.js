@@ -18,7 +18,6 @@ const cardSchema = new Schema(
     externalSerialNumber: { type: String, default: null },
     externalOrderId: { type: String, default: null, index: true },
     externalStatus: { type: String, default: null },
-    externalPayload: { type: Schema.Types.Mixed, default: null },
     status: {
       type: String,
       enum: ["available", "sold"],

@@ -31,7 +31,7 @@ const router = Router();
 router.post("/login", login);
 
 // Admin logout
-router.post("/logout", logout);
+router.post("/logout", verifyAdmin, logout);
 
 // Admin stats
 router.get("/stats", verifyAdmin, getStats);

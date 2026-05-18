@@ -14,7 +14,7 @@ import { verifyId } from "../middleware/validate.middleware.js";
 
 const router = Router();
 
-router.get("/", getPaginated);
+router.get("/", verifyToken, getPaginated);
 router.post("/availability", verifyToken, checkAvailability);
 router.post("/", verifyAdmin, createOne);
 router.patch("/", verifyAdmin, verifyId, updateOne);

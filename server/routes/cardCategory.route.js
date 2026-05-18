@@ -11,8 +11,8 @@ import { verifyAdmin } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
-router.get("/", getAll);
-router.post("/", createOne);
+router.get("/", verifyToken, getAll);
+router.post("/", verifyAdmin, createOne);
 router.patch("/", verifyAdmin, updateAll);
 router.delete("/", verifyAdmin, deleteOne);
 

@@ -170,7 +170,6 @@ const createExternalCardDocument = async ({
       externalSerialNumber,
       externalOrderId: bambooOrderId ?? null,
       externalStatus: bambooCard?.status ?? null,
-      externalPayload: bambooCard?.raw ?? null,
       status: "sold",
       soldTo: userId,
       soldAt: new Date(),
