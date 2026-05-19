@@ -8,6 +8,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
 import rateLimit from "express-rate-limit";
+import swaggerUi from "swagger-ui-express";
 
 import authRoute from "./routes/auth.route.js";
 import userRoute from "./routes/user.route.js";
@@ -20,6 +21,7 @@ import cardRoute from "./routes/card.route.js";
 import transactionRoute from "./routes/transaction.route.js";
 import settingRoute from "./routes/setting.route.js";
 import connectDB from "./config/db.js";
+import openApiSpec from "./docs/openapi.js";
 
 /*CONFIGURATIONS*/
 const __filename = fileURLToPath(import.meta.url);
@@ -50,6 +52,9 @@ app.use(
     message: "Too many requests from this IP, please try again after a minute",
   }),
 );
+
+app.get("/api/docs.json", (req, res) => res.json(openApiSpec));
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 /*ROUTES*/
 app.use("/api/", authRoute);
