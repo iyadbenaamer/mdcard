@@ -5,6 +5,7 @@ import Admin from "../models/admin.model.js";
 import User from "../models/user.model.js";
 
 import { handleError } from "../utils/errorHandler.js";
+import Setting from "../models/setting.model.js";
 
 const REMEMBER_ME_EXPIRATION = "90d";
 const ACCESS_TOKEN_EXPIRATION = "14d";
@@ -96,6 +97,23 @@ export const logout = async (req, res) => {
   try {
     clearAuthCookies(res);
     return res.status(200).json({ code: "ADMIN_LOGOUT_SUCCESS" });
+  } catch (err) {
+    return handleError(err, res);
+  }
+};
+
+export const getUser = async (req, res) => {
+  try {
+    const { id } = req.query;
+
+    const profile = await User.findById(id).select(
+      "name phone balance isActive canBuy canSendCode verificationStatus createdAt updatedAt",
+    );
+    if (!profile) {
+      return res.status(404).json({ code: "USER_NOT_FOUND" });
+    }
+    const support = await Setting.findOne({ key: "support" }).select("value");
+    return res.status(200).json({ profile, support: support?.value || "" });
   } catch (err) {
     return handleError(err, res);
   }

@@ -38,11 +38,15 @@ export const getPaginated = async (req, res) => {
     if (typeId) {
       filter.typeId = typeId;
     }
-    if (isActive === "true") {
+    if (req.admin) {
+      if (isActive === "true") {
+        filter.isActive = true;
+      }
+      if (isActive === "false") {
+        filter.isActive = false;
+      }
+    } else {
       filter.isActive = true;
-    }
-    if (isActive === "false") {
-      filter.isActive = false;
     }
 
     let tiersQuery = CardTier.find(filter).sort({ order: 1, createdAt: -1 });

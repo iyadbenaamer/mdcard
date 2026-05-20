@@ -55,7 +55,7 @@ const User = () => {
       setIsLoading(true);
       setError("");
       try {
-        const response = await axiosClient.get("/user", {
+        const response = await axiosClient.get("/admin/user", {
           params: { id },
         });
         if (!isMounted) return;

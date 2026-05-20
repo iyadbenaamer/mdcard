@@ -1,23 +1,38 @@
 const bearerAuth = [{ bearerAuth: [] }];
+const authErrorResponses = {
+  401: {
+    description: "Token expired",
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/ErrorResponse" },
+        examples: {
+          tokenExpired: { value: { code: "AUTH_TOKEN_EXPIRED" } },
+        },
+      },
+    },
+  },
+  403: {
+    description: "Authentication required or token invalid",
+    content: {
+      "application/json": {
+        schema: { $ref: "#/components/schemas/ErrorResponse" },
+        examples: {
+          loginRequired: { value: { code: "AUTH_LOGIN_REQUIRED" } },
+          tokenInvalid: { value: { code: "AUTH_TOKEN_INVALID" } },
+        },
+      },
+    },
+  },
+};
 
 export const openApiSpec = {
   openapi: "3.0.0",
   info: {
-    title: "MDCard API",
+    title: "MD Card API",
     version: "1.0.0",
     description:
       "User-facing endpoints (routes without verifyAdmin). Use Bearer token in the Authorization header. Some endpoints behave differently in sandbox mode; see endpoint notes.",
   },
-  servers: [
-    {
-      url: "https://api.mdcard.com.ly",
-      description: "Production",
-    },
-    {
-      url: "https://api-sandbox.mdcard.com.ly",
-      description: "Sandbox",
-    },
-  ],
   tags: [
     { name: "Auth", description: "Authentication and verification" },
     { name: "Users", description: "User profile" },
@@ -27,6 +42,20 @@ export const openApiSpec = {
     { name: "Cards", description: "Orders and checkout" },
     { name: "Search", description: "Search endpoints" },
     { name: "Transactions", description: "User transactions" },
+  ],
+  servers: [
+    {
+      url: "https://api.mdcard.com.ly/api",
+      description: "Production",
+    },
+    {
+      url: "https://api-sandbox.mdcard.com.ly/api",
+      description: "Sandbox",
+    },
+    {
+      url: "/api",
+      description: "Current host",
+    },
   ],
   components: {
     securitySchemes: {
@@ -328,124 +357,6 @@ export const openApiSpec = {
     },
   },
   paths: {
-    "/signup": {
-      post: {
-        tags: ["Auth"],
-        summary: "Sign up",
-        description:
-          "Create a new user account. Sandbox: returns verificationCode in the response and does not send SMS. New users start with balance 1000 in sandbox.",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  name: { type: "string" },
-                  phone: { type: "string", example: "0912345678" },
-                  password: { type: "string" },
-                },
-                required: ["name", "phone", "password"],
-              },
-            },
-          },
-        },
-        responses: {
-          201: {
-            description: "User created",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/AuthCodeResponse" },
-              },
-            },
-          },
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/check_phone_availability/register/{phone}": {
-      get: {
-        tags: ["Auth"],
-        summary: "Check phone availability for register",
-        parameters: [
-          {
-            name: "phone",
-            in: "path",
-            required: true,
-            schema: { type: "string" },
-          },
-        ],
-        responses: {
-          200: {
-            description: "Availability result",
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    success: { type: "boolean" },
-                    code: { type: "string" },
-                  },
-                },
-              },
-            },
-          },
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/check_phone_availability/reset_password/{phone}": {
-      get: {
-        tags: ["Auth"],
-        summary: "Check phone availability for reset password",
-        parameters: [
-          {
-            name: "phone",
-            in: "path",
-            required: true,
-            schema: { type: "string" },
-          },
-        ],
-        responses: {
-          200: {
-            description: "Availability result",
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    success: { type: "boolean" },
-                    code: { type: "string" },
-                  },
-                },
-              },
-            },
-          },
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
     "/login": {
       post: {
         tags: ["Auth"],
@@ -461,7 +372,11 @@ export const openApiSpec = {
                 properties: {
                   phone: { type: "string", example: "0912345678" },
                   password: { type: "string" },
-                  rememberMe: { type: "boolean" },
+                  rememberMe: {
+                    type: "boolean",
+                    description:
+                      "Keep the user logged in for a longer period 90 days instead of the default session duration 14 days.",
+                  },
                 },
                 required: ["phone", "password"],
               },
@@ -498,38 +413,12 @@ export const openApiSpec = {
         },
       },
     },
-    "/logout": {
-      post: {
-        tags: ["Auth"],
-        summary: "Logout",
-        security: bearerAuth,
-        responses: {
-          200: {
-            description: "Logout success",
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: { success: { type: "boolean" } },
-                },
-              },
-            },
-          },
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
     "/verify_access": {
       get: {
         tags: ["Auth"],
         summary: "Verify access token",
+        description:
+          "Check if the provided access token is valid and get user info.",
         security: bearerAuth,
         responses: {
           200: {
@@ -540,216 +429,7 @@ export const openApiSpec = {
               },
             },
           },
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/send_verification_code": {
-      post: {
-        tags: ["Auth"],
-        summary: "Send verification code",
-        description:
-          "Send a verification code for reset_password or verify_account. Sandbox: returns verificationCode in the response and does not send SMS.",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  type: {
-                    type: "string",
-                    enum: ["reset_password", "verify_account"],
-                  },
-                  phone: { type: "string", example: "0912345678" },
-                },
-                required: ["type", "phone"],
-              },
-            },
-          },
-        },
-        responses: {
-          200: {
-            description: "Code sent",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/AuthCodeResponse" },
-              },
-            },
-          },
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/verify_account": {
-      post: {
-        tags: ["Auth"],
-        summary: "Verify account",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  phone: { type: "string", example: "0912345678" },
-                  code: { type: "string" },
-                },
-                required: ["phone", "code"],
-              },
-            },
-          },
-        },
-        responses: {
-          200: {
-            description: "Account verified",
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    isVerified: { type: "boolean" },
-                    accessToken: { type: "string" },
-                  },
-                },
-              },
-            },
-          },
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/verify_reset_password": {
-      post: {
-        tags: ["Auth"],
-        summary: "Verify reset password code",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  phone: { type: "string", example: "0912345678" },
-                  code: { type: "string" },
-                },
-                required: ["phone", "code"],
-              },
-            },
-          },
-        },
-        responses: {
-          200: {
-            description: "Reset token",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ResetTokenResponse" },
-              },
-            },
-          },
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-      get: {
-        tags: ["Auth"],
-        summary: "Verify reset password token",
-        parameters: [
-          {
-            name: "token",
-            in: "query",
-            required: true,
-            schema: { type: "string" },
-          },
-        ],
-        responses: {
-          200: {
-            description: "Reset token",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ResetTokenResponse" },
-              },
-            },
-          },
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/reset_password/{token}": {
-      post: {
-        tags: ["Auth"],
-        summary: "Reset password",
-        parameters: [
-          {
-            name: "token",
-            in: "path",
-            required: true,
-            schema: { type: "string" },
-          },
-        ],
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  password: { type: "string" },
-                },
-                required: ["password"],
-              },
-            },
-          },
-        },
-        responses: {
-          200: {
-            description: "Password reset",
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: {
-                    isVerified: { type: "boolean" },
-                    accessToken: { type: "string" },
-                  },
-                },
-              },
-            },
-          },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -766,14 +446,6 @@ export const openApiSpec = {
         tags: ["Users"],
         summary: "Get user profile",
         security: bearerAuth,
-        parameters: [
-          {
-            name: "id",
-            in: "query",
-            required: true,
-            schema: { type: "string" },
-          },
-        ],
         responses: {
           200: {
             description: "User profile",
@@ -783,6 +455,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -819,6 +492,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -847,6 +521,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -864,7 +539,6 @@ export const openApiSpec = {
         summary: "List card tiers",
         security: bearerAuth,
         parameters: [
-          { name: "isActive", in: "query", schema: { type: "string" } },
           { name: "typeId", in: "query", schema: { type: "string" } },
           { name: "page", in: "query", schema: { type: "number" } },
           { name: "limit", in: "query", schema: { type: "number" } },
@@ -896,6 +570,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -952,6 +627,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -969,7 +645,6 @@ export const openApiSpec = {
         summary: "List card types",
         security: bearerAuth,
         parameters: [
-          { name: "isActive", in: "query", schema: { type: "string" } },
           { name: "page", in: "query", schema: { type: "number" } },
           { name: "limit", in: "query", schema: { type: "number" } },
         ],
@@ -985,6 +660,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -1000,8 +676,7 @@ export const openApiSpec = {
       get: {
         tags: ["Card Types"],
         summary: "List card types by category",
-        description:
-          "For non-admin users, isActive must be provided in the query.",
+        description: "Returns active card types for non-admin users.",
         security: bearerAuth,
         parameters: [
           {
@@ -1010,7 +685,6 @@ export const openApiSpec = {
             required: true,
             schema: { type: "string" },
           },
-          { name: "isActive", in: "query", schema: { type: "string" } },
           { name: "page", in: "query", schema: { type: "number" } },
           { name: "limit", in: "query", schema: { type: "number" } },
         ],
@@ -1032,6 +706,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -1067,6 +742,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -1110,6 +786,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -1139,6 +816,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -1172,6 +850,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -1208,6 +887,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {
@@ -1242,6 +922,7 @@ export const openApiSpec = {
               },
             },
           },
+          ...authErrorResponses,
           default: {
             description: "Error",
             content: {

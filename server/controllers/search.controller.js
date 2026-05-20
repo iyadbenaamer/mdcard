@@ -91,7 +91,12 @@ export const searchCardTypes = async (req, res) => {
       return res.status(400).json({ code: "SEARCH_QUERY_TOO_LONG" });
     }
 
-    const cardTypes = await CardType.find(buildCardTypeSearchFilter(query))
+    const filter = buildCardTypeSearchFilter(query);
+    if (!req.admin) {
+      filter.isActive = true;
+    }
+
+    const cardTypes = await CardType.find(filter)
       .select("name image isActive createdAt")
       .sort({ createdAt: -1 })
       .limit(50);

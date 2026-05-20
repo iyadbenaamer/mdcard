@@ -23,15 +23,20 @@ const isSandbox = isSandboxMode();
 
 export const getPaginated = async (req, res) => {
   try {
+    const { admin } = req;
     const { isActive } = req.query;
     const { page, limit } = parsePagination(req.query.page, req.query.limit);
 
     const filter = {};
-    if (isActive === "true") {
+    if (admin) {
+      if (isActive === "true") {
+        filter.isActive = true;
+      }
+      if (isActive === "false") {
+        filter.isActive = false;
+      }
+    } else {
       filter.isActive = true;
-    }
-    if (isActive === "false") {
-      filter.isActive = false;
     }
 
     const cardTypes = await CardType.find(filter)
@@ -58,15 +63,15 @@ export const getByCategory = async (req, res) => {
     }
 
     const filter = {};
-    if (isActive === "true") {
+    if (req.admin) {
+      if (isActive === "true") {
+        filter.isActive = true;
+      }
+      if (isActive === "false") {
+        filter.isActive = false;
+      }
+    } else {
       filter.isActive = true;
-    }
-    if (isActive === "false" && req.admin) {
-      filter.isActive = false;
-    }
-
-    if (isActive === undefined && !req.admin) {
-      return res.status(400).json({ code: "CARD_TYPE_ISACTIVE_REQUIRED" });
     }
 
     const category = await CardCategory.findById(categoryId).select("name");
@@ -273,7 +278,12 @@ export const getOne = async (req, res) => {
     );
 
     const cardTypes = await CardType.aggregate([
-      { $match: { _id: new mongoose.Types.ObjectId(id) } },
+      {
+        $match: {
+          _id: new mongoose.Types.ObjectId(id),
+          isActive: req.admin ? { $exists: true } : true,
+        },
+      },
       {
         $lookup: {
           from: "card_tiers",

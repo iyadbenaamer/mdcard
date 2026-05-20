@@ -240,9 +240,6 @@ export const login = async (req, res) => {
   }
 };
 
-export const logout = async (req, res) => {
-  return res.status(200).json({ success: true });
-};
 export const verifyAccount = async (req, res) => {
   try {
     const { phone, code } = req.body;
@@ -359,7 +356,7 @@ export const sendVerificationCode = async (req, res) => {
         expiresIn: CODE_EXPIRATION,
       },
     );
-    if (type === "reset_password") {
+    if (type === "reset-password") {
       const resendCheck = checkResendAfter(user.resetPassword);
       if (!resendCheck.allowed || !user.canSendCode) {
         return res.status(429).json({
@@ -384,7 +381,7 @@ export const sendVerificationCode = async (req, res) => {
         responsePayload.verificationCode = verificationCode;
       }
       return res.status(200).json(responsePayload);
-    } else if (type === "verify_account") {
+    } else if (type === "verify-account") {
       if (user.verificationStatus.isVerified) {
         return res.status(400).json({
           code: "AUTH_ALREADY_VERIFIED",

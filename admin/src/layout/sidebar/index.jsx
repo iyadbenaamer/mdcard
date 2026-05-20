@@ -5,7 +5,7 @@ import SidebarItem from "./SidebarItem";
 import { logout } from "state";
 import axiosClient from "utils/AxiosClient";
 
-import Logo from "assets/icons/logo-full.svg?react";
+import logo from "assets/logo-white.png";
 import HomeIcon from "assets/icons/home.svg?react";
 import CategoriesIcon from "assets/icons/categories.svg?react";
 import UsersIcon from "assets/icons/users.svg?react";
@@ -21,7 +21,9 @@ const Sidebar = ({ showLogo = true, onItemClick }) => {
   return (
     <aside className="w-full flex flex-col justify-between">
       <div>
-        {showLogo && <Logo className="w-40 mx-auto my-5" />}
+        {showLogo && (
+          <img src={logo} alt="Logo" className="w-50 mx-auto my-3" />
+        )}
         <ul className="flex flex-col gap-3 px-4 w-full py-5">
           <SidebarItem to="/" name="الرئيسية" onClick={onItemClick}>
             <HomeIcon />

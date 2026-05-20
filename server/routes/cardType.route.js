@@ -34,7 +34,7 @@ router.post(
   uploadSingleFile,
   createOne,
 );
-router.get("/get_one", verifyToken, verifyId, getUserInfo, getOne);
+router.get("/get-one", verifyToken, verifyId, getUserInfo, getOne);
 router.patch(
   "/",
   verifyAdmin,

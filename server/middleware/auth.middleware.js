@@ -51,6 +51,12 @@ export const verifyToken = async (req, res, next) => {
       return res.status(403).json({ code: "AUTH_USER_TOKEN_INVALID" });
     }
   } catch (err) {
+    if (err?.name === "TokenExpiredError") {
+      return res.status(401).json({ code: "AUTH_TOKEN_EXPIRED" });
+    }
+    if (err?.name === "JsonWebTokenError") {
+      return res.status(403).json({ code: "AUTH_TOKEN_INVALID" });
+    }
     return handleError(err, res);
   }
 };
@@ -82,6 +88,12 @@ export const getUserInfo = async (req, res, next) => {
       return res.status(403).json({ code: "AUTH_USER_TOKEN_INVALID" });
     }
   } catch (err) {
+    if (
+      err?.name === "TokenExpiredError" ||
+      err?.name === "JsonWebTokenError"
+    ) {
+      return next();
+    }
     return handleError(err, res);
   }
 };
@@ -104,6 +116,12 @@ export const verifyAdmin = async (req, res, next) => {
     req.admin = admin;
     return next();
   } catch (err) {
+    if (err?.name === "TokenExpiredError") {
+      return res.status(401).json({ code: "AUTH_TOKEN_EXPIRED" });
+    }
+    if (err?.name === "JsonWebTokenError") {
+      return res.status(403).json({ code: "AUTH_TOKEN_INVALID" });
+    }
     return handleError(err, res);
   }
 };

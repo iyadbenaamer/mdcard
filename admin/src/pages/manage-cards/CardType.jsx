@@ -52,7 +52,7 @@ const CardType = () => {
   const fetchCardType = useCallback(async () => {
     if (!typeId) return;
     try {
-      const response = await axiosClient.get("/card-types/get_one", {
+      const response = await axiosClient.get("/card-types/get-one", {
         params: { id: typeId },
       });
       const data = response.data ?? {};

@@ -6,16 +6,25 @@ import Setting from "../models/setting.model.js";
 
 export const getOne = async (req, res) => {
   try {
-    const { id } = req.query;
-
-    const profile = await User.findById(id).select(
-      "name phone balance isActive canBuy canSendCode verificationStatus createdAt updatedAt",
-    );
-    if (!profile) {
+    const { user, admin } = req;
+    if (!user) {
       return res.status(404).json({ code: "USER_NOT_FOUND" });
     }
     const support = await Setting.findOne({ key: "support" }).select("value");
-    return res.status(200).json({ profile, support: support?.value || "" });
+    return res.status(200).json({
+      profile: {
+        name: user.name,
+        phone: user.phone,
+        balance: user.balance,
+        isActive: user.isActive,
+        canBuy: user.canBuy,
+        canSendCode: user.canSendCode,
+        verificationStatus: user.verificationStatus,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+      support: support?.value || "",
+    });
   } catch (err) {
     return handleError(err, res);
   }

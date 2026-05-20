@@ -21,7 +21,7 @@ const router = Router();
 
 router.get("/", verifyAdmin, getPaginated);
 router.get("/by-category", verifyAdmin, getByCategory);
-router.get("/get_one", verifyId, verifyAdmin, getOne);
+router.get("/get-one", verifyId, verifyAdmin, getOne);
 router.get("/orders", verifyToken, getOrders);
 router.get("/orders/:id", verifyToken, verifyId, getOrderById);
 router.post("/checkout", verifyToken, checkoutCart);

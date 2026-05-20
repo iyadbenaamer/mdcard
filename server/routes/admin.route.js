@@ -4,6 +4,7 @@ import {
   logout,
   updateUser,
   deleteUser,
+  getUser,
 } from "../controllers/admin.controller.js";
 import {
   getUserCustomPricing,
@@ -56,6 +57,9 @@ router.get("/orders", verifyAdmin, getAdminOrders);
 
 // Admin orders bulk delete
 router.delete("/orders", verifyAdmin, deleteAdminOrders);
+
+// Admin get user
+router.get("/user", verifyAdmin, getUser);
 
 // Admin user update
 router.patch("/user", verifyAdmin, updateUser);

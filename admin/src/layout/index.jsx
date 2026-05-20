@@ -4,7 +4,7 @@ import Sidebar from "./sidebar";
 
 import { useWindowWidth } from "hooks/useWindowWidth";
 
-import Logo from "assets/icons/logo-full.svg?react";
+import logo from "assets/logo-white.png";
 
 const Layout = ({ children }) => {
   const windowWidth = useWindowWidth();
@@ -21,7 +21,8 @@ const Layout = ({ children }) => {
       {windowWidth < 1024 && (
         <div className="sticky top-0 z-40 bg-[#2c3e50] text-white">
           <div className="flex items-center justify-between px-4 py-3">
-            <Logo className="w-28" />
+            <img src={logo} className="w-28" />
+            {/* <Logo className="w-28" /> */}
             <button
               type="button"
               className="flex h-10 w-10 items-center justify-center rounded-lg hover:bg-white/10 transition"

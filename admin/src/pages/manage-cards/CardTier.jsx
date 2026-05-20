@@ -168,7 +168,7 @@ const CardTier = () => {
         axiosClient.get("/card-tiers", {
           params: { typeId: cardTypeId },
         }),
-        axiosClient.get("/card-types/get_one", {
+        axiosClient.get("/card-types/get-one", {
           params: { id: cardTypeId },
         }),
       ]);
