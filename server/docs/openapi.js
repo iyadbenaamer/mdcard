@@ -33,29 +33,18 @@ export const openApiSpec = {
     description:
       "User-facing endpoints (routes without verifyAdmin). Use Bearer token in the Authorization header. Some endpoints behave differently in sandbox mode; see endpoint notes.",
   },
+  servers: [
+    { url: "http://localhost:5000/api", description: "Local development" },
+  ],
   tags: [
     { name: "Auth", description: "Authentication and verification" },
     { name: "Users", description: "User profile" },
     { name: "Card Categories", description: "Card categories" },
     { name: "Card Types", description: "Card types" },
     { name: "Card Tiers", description: "Card tiers" },
-    { name: "Cards", description: "Orders and checkout" },
+    { name: "Orders", description: "Orders and checkout" },
     { name: "Search", description: "Search endpoints" },
     { name: "Transactions", description: "User transactions" },
-  ],
-  servers: [
-    {
-      url: "https://api.mdcard.com.ly/api",
-      description: "Production",
-    },
-    {
-      url: "https://api-sandbox.mdcard.com.ly/api",
-      description: "Sandbox",
-    },
-    {
-      url: "/api",
-      description: "Current host",
-    },
   ],
   components: {
     securitySchemes: {
@@ -165,12 +154,6 @@ export const openApiSpec = {
           _id: { type: "string" },
           typeId: { type: "string" },
           title: { type: "string" },
-          buyPrice: { type: "number", nullable: true },
-          buyPriceUsd: { type: "number", nullable: true },
-          sellPrice: { type: "number" },
-          bambooProductId: { type: "string" },
-          value: { type: "number", nullable: true },
-          isActive: { type: "boolean" },
           order: { type: "number" },
         },
       },
@@ -189,19 +172,12 @@ export const openApiSpec = {
           _id: { type: "string" },
           categoryId: { type: "string" },
           name: { type: "string" },
-          fulfillmentSource: {
-            type: "string",
-            enum: ["local", "bamboo"],
-          },
           image: { type: "string", nullable: true },
           printImage: { type: "string", nullable: true },
           redeemFormat: { type: "string", nullable: true },
           showExpiryDateDay: { type: "boolean" },
           notes: { type: "string", nullable: true },
           order: { type: "number" },
-          isActive: { type: "boolean" },
-          createdAt: { type: "string", format: "date-time" },
-          updatedAt: { type: "string", format: "date-time" },
         },
       },
       CardTypeWithTiers: {
@@ -237,13 +213,6 @@ export const openApiSpec = {
           code: { type: "string" },
           pin: { type: "string", nullable: true },
           expiryDate: { type: "string", format: "date-time", nullable: true },
-          provider: { type: "string", enum: ["local", "bamboo"] },
-          status: { type: "string", enum: ["available", "sold"] },
-          soldTo: { type: "string", nullable: true },
-          soldAt: { type: "string", format: "date-time", nullable: true },
-          externalSerialNumber: { type: "string", nullable: true },
-          externalOrderId: { type: "string", nullable: true },
-          externalStatus: { type: "string", nullable: true },
         },
       },
       OrderItem: {
@@ -253,8 +222,6 @@ export const openApiSpec = {
           title: { type: "string" },
           price: { type: "number" },
           quantity: { type: "number" },
-          provider: { type: "string" },
-          externalOrderId: { type: "string", nullable: true },
           cards: { type: "array", items: { type: "string" } },
         },
       },
@@ -262,7 +229,6 @@ export const openApiSpec = {
         type: "object",
         properties: {
           _id: { type: "string" },
-          userId: { type: "string" },
           totalAmount: { type: "number" },
           items: {
             type: "array",
@@ -350,7 +316,6 @@ export const openApiSpec = {
           _id: { type: "string" },
           name: { type: "string" },
           image: { type: "string", nullable: true },
-          isActive: { type: "boolean" },
           createdAt: { type: "string", format: "date-time" },
         },
       },
@@ -371,7 +336,7 @@ export const openApiSpec = {
                 type: "object",
                 properties: {
                   phone: { type: "string", example: "0912345678" },
-                  password: { type: "string" },
+                  password: { type: "string", example: "string" },
                   rememberMe: {
                     type: "boolean",
                     description:
@@ -413,7 +378,7 @@ export const openApiSpec = {
         },
       },
     },
-    "/verify_access": {
+    "/verify-access": {
       get: {
         tags: ["Auth"],
         summary: "Verify access token",
@@ -517,55 +482,6 @@ export const openApiSpec = {
                 schema: {
                   type: "array",
                   items: { $ref: "#/components/schemas/CardCategory" },
-                },
-              },
-            },
-          },
-          ...authErrorResponses,
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
-    "/card-tiers": {
-      get: {
-        tags: ["Card Tiers"],
-        summary: "List card tiers",
-        security: bearerAuth,
-        parameters: [
-          { name: "typeId", in: "query", schema: { type: "string" } },
-          { name: "page", in: "query", schema: { type: "number" } },
-          { name: "limit", in: "query", schema: { type: "number" } },
-        ],
-        responses: {
-          200: {
-            description: "Card tiers",
-            content: {
-              "application/json": {
-                schema: {
-                  oneOf: [
-                    {
-                      type: "array",
-                      items: { $ref: "#/components/schemas/CardTier" },
-                    },
-                    {
-                      type: "object",
-                      properties: {
-                        name: { type: "string" },
-                        categoryName: { type: "string" },
-                        tiers: {
-                          type: "array",
-                          items: { $ref: "#/components/schemas/CardTier" },
-                        },
-                      },
-                    },
-                  ],
                 },
               },
             },
@@ -718,7 +634,7 @@ export const openApiSpec = {
         },
       },
     },
-    "/card-types/get_one": {
+    "/card-types/get-one": {
       get: {
         tags: ["Card Types"],
         summary: "Get card type details",
@@ -754,9 +670,9 @@ export const openApiSpec = {
         },
       },
     },
-    "/cards/checkout": {
+    "/orders/checkout": {
       post: {
-        tags: ["Cards"],
+        tags: ["Orders"],
         summary: "Checkout cart",
         description:
           "Sandbox: does not check local stock or call Bamboo, generates 12-digit codes, and auto-topups +1000 on insufficient balance (a deposit transaction is recorded).",
@@ -798,9 +714,9 @@ export const openApiSpec = {
         },
       },
     },
-    "/cards/orders": {
+    "/orders": {
       get: {
-        tags: ["Cards"],
+        tags: ["Orders"],
         summary: "List user orders",
         security: bearerAuth,
         parameters: [
@@ -828,9 +744,9 @@ export const openApiSpec = {
         },
       },
     },
-    "/cards/orders/{id}": {
+    "/orders/{id}": {
       get: {
-        tags: ["Cards"],
+        tags: ["Orders"],
         summary: "Get order by id",
         security: bearerAuth,
         parameters: [

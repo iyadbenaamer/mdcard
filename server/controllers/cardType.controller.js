@@ -39,11 +39,32 @@ export const getPaginated = async (req, res) => {
       filter.isActive = true;
     }
 
-    const cardTypes = await CardType.find(filter)
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(limit);
-
+    const cardTypes = await CardType.aggregate([
+      { $match: filter },
+      { $sort: { createdAt: -1 } },
+      { $skip: (page - 1) * limit },
+      { $limit: limit },
+      {
+        $project: {
+          _id: 1,
+          categoryId: 1,
+          name: 1,
+          image: 1,
+          order: 1,
+          notes: 1,
+          redeemFormat: 1,
+          printImage: 1,
+          showExpiryDateDay: 1,
+          ...(admin
+            ? {
+                createdAt: 1,
+                fulfillmentSource: 1,
+                isActive: 1,
+              }
+            : {}),
+        },
+      },
+    ]);
     return res.status(200).json(cardTypes);
   } catch (err) {
     return handleError(err, res);
@@ -100,6 +121,26 @@ export const getByCategory = async (req, res) => {
       },
       { $replaceRoot: { newRoot: "$types" } },
       { $sort: { order: 1, createdAt: -1 } },
+      {
+        $project: {
+          _id: 1,
+          categoryId: 1,
+          name: 1,
+          image: 1,
+          order: 1,
+          notes: 1,
+          redeemFormat: 1,
+          printImage: 1,
+          showExpiryDateDay: 1,
+          ...(req.admin
+            ? {
+                createdAt: 1,
+                fulfillmentSource: 1,
+                isActive: 1,
+              }
+            : {}),
+        },
+      },
       ...(isPaginated
         ? [{ $skip: (page - 1) * limit }, { $limit: limit }]
         : []),
@@ -299,7 +340,7 @@ export const getOne = async (req, res) => {
     }
 
     // Calculate effective buyPrice for each tier (for API response - end user sees this)
-    const result = cardTypes[0];
+    let result = cardTypes[0];
     if (Array.isArray(result.tiers)) {
       if (req.admin) {
         // Admin sees original data (buyPrice + buyPriceUsd) for editing
@@ -313,13 +354,28 @@ export const getOne = async (req, res) => {
             dollarRate,
           );
           // Return tier with calculated buyPrice, hide internal buyPriceUsd
-          const { buyPriceUsd, ...tierWithoutUsd } = tier;
+          const {
+            buyPriceUsd,
+            bambooProductId,
+            value,
+            isActive,
+            createdAt,
+            updatedAt,
+            ...tierWithoutPrivate
+          } = tier;
           return {
-            ...tierWithoutUsd,
+            ...tierWithoutPrivate,
             buyPrice: effectiveBuyPrice,
           };
         });
       }
+    }
+
+    if (!req.admin) {
+      delete result.fulfillmentSource;
+      delete result.isActive;
+      delete result.createdAt;
+      delete result.updatedAt;
     }
 
     return res.status(200).json(result);
@@ -459,7 +515,7 @@ export const updateOne = async (req, res) => {
     if (image !== undefined) {
       // If updating image, delete the old one if it exists and is different
       if (cardType.image && cardType.image !== image) {
-        const oldImagePath = path.join(process.cwd(), "public", cardType.image);
+        const oldImagePath = path.join(process.env.UPLOAD_DIR, cardType.image);
         await safeDelete(oldImagePath);
       }
       cardType.image = image;
@@ -468,8 +524,7 @@ export const updateOne = async (req, res) => {
     if (printImage !== undefined) {
       if (cardType.printImage && cardType.printImage !== printImage) {
         const oldPrintPath = path.join(
-          process.cwd(),
-          "public",
+          process.env.UPLOAD_DIR,
           cardType.printImage,
         );
         await safeDelete(oldPrintPath);
@@ -497,15 +552,11 @@ export const updateOne = async (req, res) => {
   } catch (err) {
     // If update failed but we uploaded files, clean them up
     if (req.filePath) {
-      const newImagePath = path.join(process.cwd(), "public", req.filePath);
+      const newImagePath = path.join(process.env.UPLOAD_DIR, req.filePath);
       await safeDelete(newImagePath);
     }
     if (req.printFilePath) {
-      const newPrintPath = path.join(
-        process.cwd(),
-        "public",
-        req.printFilePath,
-      );
+      const newPrintPath = path.join(process.env.UPLOAD_DIR, req.printFilePath);
       await safeDelete(newPrintPath);
     }
     return handleError(err, res);
@@ -515,7 +566,6 @@ export const updateOne = async (req, res) => {
 export const deleteOne = async (req, res) => {
   try {
     const { id } = req.query;
-
     const cardType = await CardType.findById(id);
     if (!cardType) {
       return res.status(404).json({ code: "CARD_TYPE_NOT_FOUND" });
@@ -527,11 +577,12 @@ export const deleteOne = async (req, res) => {
     }
 
     if (cardType.image) {
-      const imagePath = path.join(process.cwd(), "public", cardType.image);
+      const imagePath = path.join(process.env.UPLOAD_DIR, cardType.image);
+      console.log(imagePath);
       await safeDelete(imagePath);
     }
     if (cardType.printImage) {
-      const printPath = path.join(process.cwd(), "public", cardType.printImage);
+      const printPath = path.join(process.env.UPLOAD_DIR, cardType.printImage);
       await safeDelete(printPath);
     }
 

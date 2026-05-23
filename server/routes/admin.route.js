@@ -10,7 +10,7 @@ import {
   getUserCustomPricing,
   createUserCustomPricing,
   deleteUserCustomPricing,
-} from "../controllers/customePricing.controller.js";
+} from "../controllers/customPricing.controller.js";
 import { getStats } from "../controllers/stats.controller.js";
 import {
   createDeposit,

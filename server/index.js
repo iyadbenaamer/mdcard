@@ -18,15 +18,20 @@ import cardCategoryRoute from "./routes/cardCategory.route.js";
 import cardTypeRoute from "./routes/cardType.route.js";
 import cardTierRoute from "./routes/cardTier.route.js";
 import cardRoute from "./routes/card.route.js";
+import orderRoute from "./routes/order.route.js";
 import transactionRoute from "./routes/transaction.route.js";
 import settingRoute from "./routes/setting.route.js";
 import connectDB from "./config/db.js";
 import openApiSpec from "./docs/openapi.js";
 
+dotenv.config();
+
 /*CONFIGURATIONS*/
+const UPLOAD_DIR = process.env.UPLOAD_DIR || "C:\\Users\\Iyad\\mdcard\\";
+const storagePath = path.join(UPLOAD_DIR, "storage");
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-dotenv.config();
+
 const app = express();
 const cookieSecret = process.env.COOKIE_SECRET || process.env.JWT_SECRET;
 const corsOrigins = process.env.CORS_ORIGIN
@@ -42,7 +47,7 @@ app.use(helmet.crossOriginResourcePolicy({ policy: "cross-origin" }));
 app.use(morgan("short"));
 app.use(express.urlencoded({ limit: "200mb", extended: true }));
 app.use(cors(corsOptions));
-app.use("/storage", express.static(path.join(__dirname, "public/storage")));
+app.use("/storage", express.static(storagePath));
 app.use(cookieParser(cookieSecret));
 
 app.use(
@@ -65,6 +70,7 @@ app.use("/api/card-categories", cardCategoryRoute);
 app.use("/api/card-types", cardTypeRoute);
 app.use("/api/card-tiers", cardTierRoute);
 app.use("/api/cards", cardRoute);
+app.use("/api/orders", orderRoute);
 app.use("/api/transactions", transactionRoute);
 app.use("/api/settings", settingRoute);
 

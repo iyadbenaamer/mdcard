@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-import CustomePricing from "../models/customePricing.model.js";
+import CustomPricing from "../models/customPricing.model.js";
 import CardTier from "../models/cardTier.model.js";
 import User from "../models/user.model.js";
 
@@ -58,7 +58,7 @@ export const getUserCustomPricing = async (req, res) => {
       return res.status(400).json({ code: "CUSTOM_PRICING_USER_ID_INVALID" });
     }
 
-    const pricingRules = await CustomePricing.aggregate([
+    const pricingRules = await CustomPricing.aggregate([
       ...buildPricingPipeline({
         userId: new mongoose.Types.ObjectId(userId),
       }),
@@ -99,7 +99,7 @@ export const createUserCustomPricing = async (req, res) => {
       return res.status(404).json({ code: "CARD_TIER_NOT_FOUND" });
     }
 
-    const existingRule = await CustomePricing.findOne({
+    const existingRule = await CustomPricing.findOne({
       userId,
       tierId,
     }).select("_id");
@@ -107,7 +107,7 @@ export const createUserCustomPricing = async (req, res) => {
       return res.status(409).json({ code: "CUSTOM_PRICING_EXISTS" });
     }
 
-    const rule = new CustomePricing({
+    const rule = new CustomPricing({
       userId,
       tierId,
       buyPrice: parsedBuyPrice,
@@ -115,7 +115,7 @@ export const createUserCustomPricing = async (req, res) => {
 
     await rule.save();
 
-    const enriched = await CustomePricing.aggregate([
+    const enriched = await CustomPricing.aggregate([
       ...buildPricingPipeline({ _id: rule._id }),
     ]);
 
@@ -132,7 +132,7 @@ export const deleteUserCustomPricing = async (req, res) => {
       return res.status(400).json({ code: "CUSTOM_PRICING_ID_INVALID" });
     }
 
-    const rule = await CustomePricing.findById(id);
+    const rule = await CustomPricing.findById(id);
     if (!rule) {
       return res.status(404).json({ code: "CUSTOM_PRICING_NOT_FOUND" });
     }

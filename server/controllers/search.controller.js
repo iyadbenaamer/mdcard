@@ -97,7 +97,7 @@ export const searchCardTypes = async (req, res) => {
     }
 
     const cardTypes = await CardType.find(filter)
-      .select("name image isActive createdAt")
+      .select("name image createdAt")
       .sort({ createdAt: -1 })
       .limit(50);
     return res.json(cardTypes);

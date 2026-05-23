@@ -16,8 +16,6 @@ const transactionSchema = new Schema(
     amount: { type: Number, required: true, min: 0 },
     balanceBefore: { type: Number, min: 0 },
     balanceAfter: { type: Number, min: 0 },
-    cardId: { type: ObjectId, ref: "Card" },
-    tierId: { type: ObjectId, ref: "CardTier" },
     orderId: { type: ObjectId, ref: "Order" },
     createdByAdmin: { type: ObjectId, ref: "Admin" },
     originalTransactionId: { type: ObjectId, ref: "Transaction" },

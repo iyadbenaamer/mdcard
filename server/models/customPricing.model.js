@@ -2,7 +2,7 @@ import { Schema, model, Types } from "mongoose";
 
 const { ObjectId } = Types;
 
-const customePricingSchema = new Schema(
+const customPricingSchema = new Schema(
   {
     userId: { type: ObjectId, ref: "User", required: true },
     tierId: { type: ObjectId, ref: "CardTier", required: true },
@@ -11,12 +11,12 @@ const customePricingSchema = new Schema(
   { timestamps: true },
 );
 
-customePricingSchema.index({ userId: 1, tierId: 1 }, { unique: true });
+customPricingSchema.index({ userId: 1, tierId: 1 }, { unique: true });
 
-const CustomePricing = model(
-  "CustomePricing",
-  customePricingSchema,
-  "custome_pricing",
+const CustomPricing = model(
+  "CustomPricing",
+  customPricingSchema,
+  "custom_pricing",
 );
 
-export default CustomePricing;
+export default CustomPricing;

@@ -1,7 +1,12 @@
 import multer from "multer";
 import path from "path";
+import { config } from "dotenv";
 
-const storagePath = path.join(process.cwd(), "public", "storage");
+config();
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || "C:\\Users\\Iyad\\mdcard\\";
+
+const storagePath = path.join(UPLOAD_DIR, "storage");
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {

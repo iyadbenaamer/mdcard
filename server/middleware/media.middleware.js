@@ -80,11 +80,19 @@ export const uploadSingleFile = async (req, res, next) => {
 
     if (req.files) {
       // legacy: media field
-      if (req.files.media && Array.isArray(req.files.media) && req.files.media[0]) {
+      if (
+        req.files.media &&
+        Array.isArray(req.files.media) &&
+        req.files.media[0]
+      ) {
         req.filePath = `${uploadsFolder}${req.files.media[0].filename}`;
       }
       // new: printImage field
-      if (req.files.printImage && Array.isArray(req.files.printImage) && req.files.printImage[0]) {
+      if (
+        req.files.printImage &&
+        Array.isArray(req.files.printImage) &&
+        req.files.printImage[0]
+      ) {
         req.printFilePath = `${uploadsFolder}${req.files.printImage[0].filename}`;
       }
     }

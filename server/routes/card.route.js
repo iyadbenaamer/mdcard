@@ -7,9 +7,6 @@ import {
   getOne,
   getPaginated,
   getByCategory,
-  checkoutCart,
-  getOrders,
-  getOrderById,
   updateOne,
 } from "../controllers/card.controller.js";
 
@@ -22,9 +19,6 @@ const router = Router();
 router.get("/", verifyAdmin, getPaginated);
 router.get("/by-category", verifyAdmin, getByCategory);
 router.get("/get-one", verifyId, verifyAdmin, getOne);
-router.get("/orders", verifyToken, getOrders);
-router.get("/orders/:id", verifyToken, verifyId, getOrderById);
-router.post("/checkout", verifyToken, checkoutCart);
 router.post("/", verifyAdmin, createOne);
 router.post("/import", verifyAdmin, upload.single("file"), importFromExcel);
 router.patch("/", verifyAdmin, verifyId, updateOne);

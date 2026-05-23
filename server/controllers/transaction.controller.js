@@ -5,7 +5,6 @@ import Transaction from "../models/transaction.model.js";
 
 import { handleError } from "../utils/errorHandler.js";
 import parsePagination from "../utils/parsePagination.js";
-import { decryptCardCode } from "../utils/cardCodeCrypto.js";
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -143,8 +142,6 @@ export const createRefund = async (req, res) => {
       amount: parsedAmount,
       balanceBefore,
       balanceAfter: user.balance,
-      cardId: original.cardId,
-      tierId: original.tierId,
       createdByAdmin: req.admin?._id || undefined,
       originalTransactionId: original._id,
     });
@@ -211,24 +208,55 @@ export const getUserTransactions = async (req, res) => {
       Transaction.countDocuments(filter),
     ]);
 
-    // Decrypt the cards within the orders before sending
     const payload = transactions.map((tx) => {
       const txObj = tx.toObject();
+      const result = {
+        _id: txObj._id,
+        type: txObj.type,
+        amount: txObj.amount,
+        balanceBefore: txObj.balanceBefore,
+        balanceAfter: txObj.balanceAfter,
+        createdAt: txObj.createdAt,
+      };
+
       if (txObj.type === "purchase" && txObj.orderId) {
-        txObj.orderId.items = txObj.orderId.items.map((item) => ({
-          ...item,
-          cards: item.cards.map((card) => {
-            if (card && card.code) {
-              return {
-                ...card,
-                code: decryptCardCode(card.code),
-              };
-            }
-            return card;
+        const items = Array.isArray(txObj.orderId.items)
+          ? txObj.orderId.items
+          : [];
+
+        result.orderId = {
+          _id: txObj.orderId._id,
+          items: items.map((item) => {
+            const tier =
+              item?.tierId && typeof item.tierId === "object"
+                ? item.tierId
+                : null;
+            const type =
+              tier?.typeId && typeof tier.typeId === "object"
+                ? tier.typeId
+                : null;
+
+            return {
+              tierId: tier
+                ? {
+                    _id: tier._id,
+                    typeId: type
+                      ? {
+                          _id: type._id,
+                          name: type.name,
+                        }
+                      : null,
+                  }
+                : null,
+              title: item?.title,
+              price: item?.price,
+              quantity: item?.quantity,
+            };
           }),
-        }));
+        };
       }
-      return txObj;
+
+      return result;
     });
 
     const totalPages = Math.ceil(total / limit);

@@ -2,7 +2,7 @@ import Card from "../models/card.model.js";
 import CardCategory from "../models/cardCategory.model.js";
 import CardType from "../models/cardType.model.js";
 import CardTier from "../models/cardTier.model.js";
-import CustomePricing from "../models/customePricing.model.js";
+import CustomPricing from "../models/customPricing.model.js";
 
 import { handleError } from "../utils/errorHandler.js";
 import parsePagination from "../utils/parsePagination.js";
@@ -59,7 +59,7 @@ export const getPaginated = async (req, res) => {
 
     if (!req.admin && req.user && tiers.length) {
       const tierIds = tiers.map((tier) => tier._id);
-      const customPrices = await CustomePricing.find({
+      const customPrices = await CustomPricing.find({
         userId: req.user.id,
         tierId: { $in: tierIds },
       }).select("tierId buyPrice");
