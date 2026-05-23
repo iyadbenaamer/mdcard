@@ -45,6 +45,9 @@ export const verifyToken = async (req, res, next) => {
     }
     const user = await User.findById(tokenInfo.id);
     if (user) {
+      if (user.isActive === false) {
+        return res.status(403).json({ code: "AUTH_USER_INACTIVE" });
+      }
       req.user = user;
       return next();
     } else {

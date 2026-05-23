@@ -213,16 +213,37 @@ export const openApiSpec = {
           code: { type: "string" },
           pin: { type: "string", nullable: true },
           expiryDate: { type: "string", format: "date-time", nullable: true },
+          redeemFormat: { type: "string", nullable: true },
         },
       },
       OrderItem: {
         type: "object",
         properties: {
-          tierId: { type: "string" },
+          tierId: {
+            type: "object",
+            properties: {
+              _id: { type: "string" },
+              title: { type: "string" },
+              typeId: {
+                type: "object",
+                properties: {
+                  _id: { type: "string" },
+                  name: { type: "string" },
+                  redeemFormat: { type: "string", nullable: true },
+                  image: { type: "string", nullable: true },
+                  printImage: { type: "string", nullable: true },
+                  showExpiryDateDay: { type: "boolean" },
+                },
+              },
+            },
+          },
           title: { type: "string" },
           price: { type: "number" },
           quantity: { type: "number" },
-          cards: { type: "array", items: { type: "string" } },
+          cards: {
+            type: "array",
+            items: { $ref: "#/components/schemas/Card" },
+          },
         },
       },
       Order: {

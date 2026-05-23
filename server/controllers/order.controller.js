@@ -939,7 +939,9 @@ export const getOrders = async (req, res) => {
 export const getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
-
+    if (!req.user) {
+      return res.status(403).json({ code: "AUTH_USER_REQUIRED" });
+    }
     const order = await Order.findOne({
       _id: id,
       userId: req.user.id,
@@ -987,6 +989,7 @@ export const getOrderById = async (req, res) => {
                       name: type.name,
                       redeemFormat: type.redeemFormat ?? null,
                       image: type.image ?? null,
+                      printImage: type.printImage ?? null,
                       showExpiryDateDay: type.showExpiryDateDay ?? null,
                     }
                   : null,
@@ -1011,7 +1014,6 @@ export const getOrderById = async (req, res) => {
               pin: card.pin ?? null,
               expiryDate: card.expiryDate ?? null,
               redeemFormat: type?.redeemFormat || null,
-              printImage: type?.printImage || null,
             };
           }),
         };

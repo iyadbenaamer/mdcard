@@ -79,6 +79,7 @@ export const signup = async (req, res) => {
       phone,
       name,
       password: hashedPassword,
+      isActive: false,
     });
 
     const verificationCode = generateCode(6);
