@@ -8,26 +8,20 @@ import HeroSection from "./components/sections/HeroSection";
 import ServicesSection from "./components/sections/ServicesSection";
 import { content } from "./content/siteContent";
 
+import Terms from "./pages/Terms";
+import { useLanguage } from "./contexts/LanguageContext";
+import { Routes, Route } from "react-router-dom";
+
 import mdzoneLogo from "./assets/mdzone.png";
 
 function App() {
-  const [language, setLanguage] = useState(() => {
-    const savedLanguage = localStorage.getItem("language");
-    return savedLanguage === "en" ? "en" : "ar";
-  });
+  const { language, setLanguage } = useLanguage();
   const [isDark, setIsDark] = useState(() => {
     const savedTheme = localStorage.getItem("isDark");
     return savedTheme === "true";
   });
 
   const t = useMemo(() => content[language], [language]);
-  const dir = language === "ar" ? "rtl" : "ltr";
-
-  useEffect(() => {
-    document.documentElement.lang = language;
-    document.documentElement.dir = dir;
-    localStorage.setItem("language", language);
-  }, [language, dir]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDark);
@@ -51,13 +45,27 @@ function App() {
       />
 
       <main>
-        <HeroSection t={t} language={language} />
-        <AboutSection t={t} />
-        <ServicesSection t={t} language={language} />
-        <ContactSection t={t} />
+        <Routes>
+          <Route path="/terms" element={<Terms language={language} />} />
+          <Route
+            path="/*"
+            element={
+              <>
+                <HeroSection t={t} language={language} />
+                <AboutSection t={t} />
+                <ServicesSection t={t} language={language} />
+                <ContactSection t={t} />
+              </>
+            }
+          />
+        </Routes>
       </main>
 
-      <SiteFooter mdzoneLogo={mdzoneLogo} footer={t.footer} />
+      <SiteFooter
+        mdzoneLogo={mdzoneLogo}
+        footer={t.footer}
+        language={language}
+      />
     </div>
   );
 }

@@ -1,5 +1,9 @@
 import appLogo from "assets/logo-white.png";
-function SiteFooter({ mdzoneLogo, footer }) {
+import { Link } from "react-router-dom";
+function SiteFooter({ mdzoneLogo, footer, language = "ar" }) {
+  const termsLabel =
+    language === "ar" ? "الشروط والأحكام" : "Terms and Conditions";
+
   return (
     <footer className="relative overflow-hidden bg-slate-950/80">
       <div className="section-shell relative">
@@ -22,6 +26,14 @@ function SiteFooter({ mdzoneLogo, footer }) {
           <p className="max-w-3xl text-sm text-center text-slate-100">
             {footer.short}
           </p>
+          <div className="mt-4">
+            <Link
+              to="/terms"
+              className="text-sm text-slate-300 hover:text-white underline"
+            >
+              {termsLabel}
+            </Link>
+          </div>
           <p className="mt-6 text-center text-xs text-slate-300">
             © {new Date().getFullYear()} MD Card - {footer.rights}
           </p>

@@ -9,6 +9,7 @@ export const content = {
       home: "الرئيسية",
       about: "من نحن",
       services: "خدماتنا",
+      terms: "الشروط والأحكام",
       contact: "تواصل معنا",
     },
     hero: {
@@ -117,6 +118,7 @@ export const content = {
       home: "Home",
       about: "About Us",
       services: "Services",
+      terms: "Terms and Conditions",
       contact: "Contact Us",
     },
     hero: {

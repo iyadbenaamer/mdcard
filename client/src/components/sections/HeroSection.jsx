@@ -7,6 +7,7 @@ import FacebookIcon from "assets/icons/facebook.svg?react";
 import WhatsappIcon from "assets/icons/whatsapp.svg?react";
 import InstagramIcon from "assets/icons/instagram.svg?react";
 import { CONTACT_INFO, CONTACT_LINKS } from "../../constants/contact";
+import { Link } from "react-router-dom";
 
 function HeroSection({ t, language }) {
   const fadeUp = {
@@ -51,6 +52,13 @@ function HeroSection({ t, language }) {
             <p className="mt-5 max-w-3xl text-base leading-8 text-slate-100/95">
               {t.hero.description}
             </p>
+            <div className="mt-3">
+              <Link to="/terms" className="text-sm text-white/90 underline">
+                {language === "ar"
+                  ? "اقرأ الشروط والأحكام"
+                  : "Read Terms and Conditions"}
+              </Link>
+            </div>
           </Motion.div>
           <Motion.div
             initial={{ opacity: 0, y: 15 }}
