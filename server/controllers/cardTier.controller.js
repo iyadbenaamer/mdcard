@@ -34,19 +34,9 @@ export const getPaginated = async (req, res) => {
       }
     }
 
-    const filter = {};
+    const filter = { isActive: true };
     if (typeId) {
       filter.typeId = typeId;
-    }
-    if (req.admin) {
-      if (isActive === "true") {
-        filter.isActive = true;
-      }
-      if (isActive === "false") {
-        filter.isActive = false;
-      }
-    } else {
-      filter.isActive = true;
     }
 
     let tiersQuery = CardTier.find(filter).sort({ order: 1, createdAt: -1 });
@@ -57,7 +47,7 @@ export const getPaginated = async (req, res) => {
     }
     const tiers = await tiersQuery.lean();
 
-    if (!req.admin && req.user && tiers.length) {
+    if (req.user && tiers.length) {
       const tierIds = tiers.map((tier) => tier._id);
       const customPrices = await CustomPricing.find({
         userId: req.user.id,

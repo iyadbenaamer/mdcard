@@ -6,8 +6,7 @@ import {
   checkoutCart,
 } from "../controllers/order.controller.js";
 
-import { verifyAdmin, verifyToken } from "../middleware/auth.middleware.js";
-import { upload } from "../middleware/upload.middleware.js";
+import { verifyToken } from "../middleware/auth.middleware.js";
 import { verifyId } from "../middleware/validate.middleware.js";
 
 const router = Router();

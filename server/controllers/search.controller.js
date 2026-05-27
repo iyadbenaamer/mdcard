@@ -92,9 +92,7 @@ export const searchCardTypes = async (req, res) => {
     }
 
     const filter = buildCardTypeSearchFilter(query);
-    if (!req.admin) {
-      filter.isActive = true;
-    }
+    filter.isActive = true;
 
     const cardTypes = await CardType.find(filter)
       .select("name image createdAt")

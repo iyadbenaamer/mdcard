@@ -111,9 +111,7 @@ export const signup = async (req, res) => {
 };
 
 export const verifyAccessToken = async (req, res) => {
-  const role = req.admin ? "admin" : "user";
-  const id = req.admin?.id || req.user?.id;
-  return res.status(200).json({ valid: true, role, id });
+  return res.status(200).json({ valid: true, role: "user", id: req.user?.id });
 };
 export const checkPhoneForRegister = async (req, res) => {
   try {

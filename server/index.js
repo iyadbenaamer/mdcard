@@ -13,14 +13,11 @@ import swaggerUi from "swagger-ui-express";
 import authRoute from "./routes/auth.route.js";
 import userRoute from "./routes/user.route.js";
 import searchRoute from "./routes/search.route.js";
-import adminRoute from "./routes/admin.route.js";
 import cardCategoryRoute from "./routes/cardCategory.route.js";
 import cardTypeRoute from "./routes/cardType.route.js";
 import cardTierRoute from "./routes/cardTier.route.js";
-import cardRoute from "./routes/card.route.js";
 import orderRoute from "./routes/order.route.js";
 import transactionRoute from "./routes/transaction.route.js";
-import settingRoute from "./routes/setting.route.js";
 import connectDB from "./config/db.js";
 import openApiSpec from "./docs/openapi.js";
 
@@ -65,14 +62,11 @@ app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 app.use("/api/", authRoute);
 app.use("/api/user", userRoute);
 app.use("/api/search", searchRoute);
-app.use("/api/admin", adminRoute);
 app.use("/api/card-categories", cardCategoryRoute);
 app.use("/api/card-types", cardTypeRoute);
 app.use("/api/card-tiers", cardTierRoute);
-app.use("/api/cards", cardRoute);
 app.use("/api/orders", orderRoute);
 app.use("/api/transactions", transactionRoute);
-app.use("/api/settings", settingRoute);
 
 /*MONGOOSE SETUP*/
 connectDB();

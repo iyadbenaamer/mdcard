@@ -4,9 +4,9 @@ import User from "../models/user.model.js";
 import { handleError } from "../utils/errorHandler.js";
 import Setting from "../models/setting.model.js";
 
-export const getOne = async (req, res) => {
+export const get = async (req, res) => {
   try {
-    const { user, admin } = req;
+    const { user } = req;
     if (!user) {
       return res.status(404).json({ code: "USER_NOT_FOUND" });
     }
@@ -30,37 +30,9 @@ export const getOne = async (req, res) => {
   }
 };
 
-export const getAll = async (req, res) => {
-  try {
-    const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.max(1, Math.min(50, Number(req.query.limit) || 10));
-    const sortBy = req.query.sortBy === "status" ? "status" : "name";
-    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
-    const sortField = sortBy === "status" ? "isActive" : "name";
-
-    const total = await User.countDocuments();
-    const users = await User.find()
-      .select("name phone isActive createdAt")
-      .sort({ [sortField]: sortOrder, _id: 1 })
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .lean();
-
-    return res.status(200).json({
-      users,
-      page,
-      limit,
-      total,
-      totalPages: Math.max(1, Math.ceil(total / limit)),
-    });
-  } catch (err) {
-    return handleError(err, res);
-  }
-};
-
 /*UPDATE*/
 
-export const updateOne = async (req, res) => {
+export const update = async (req, res) => {
   try {
     const { id } = req.user;
     let { password } = req.body;

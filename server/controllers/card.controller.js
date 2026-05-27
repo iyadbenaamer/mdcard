@@ -92,7 +92,7 @@ export const getPaginated = async (req, res) => {
     const { tierId, status, soldTo, serialNumber } = req.query;
     const { page, limit } = parsePagination(req.query.page, req.query.limit);
 
-    const filter = {};
+    const filter = { status: "available" };
 
     if (tierId) {
       if (!mongoose.Types.ObjectId.isValid(tierId)) {
@@ -119,19 +119,13 @@ export const getPaginated = async (req, res) => {
       filter.serialNumber = serialNumber.trim();
     }
 
-    if (!req.admin) {
-      filter.status = "available";
-    }
-
     const total = await Card.countDocuments(filter);
     const cards = await Card.find(filter)
       .sort({ serialNumber: 1, _id: 1 })
       .skip((page - 1) * limit)
       .limit(limit);
     const totalPages = Math.max(1, Math.ceil(total / limit));
-    const payload = req.admin
-      ? cards.map(withDecryptedCode)
-      : cards.map(sanitizeCardForPublic);
+    const payload = cards.map(sanitizeCardForPublic);
 
     return res.status(200).json({
       cards: payload,
@@ -248,18 +242,14 @@ export const getOne = async (req, res) => {
       return res.status(404).json({ code: "CARD_NOT_FOUND" });
     }
 
-    if (!req.admin && card.status === "sold") {
+    if (card.status === "sold") {
       if (!req.user || !card.soldTo || card.soldTo.toString() !== req.user.id) {
         return res.status(404).json({ code: "CARD_NOT_FOUND" });
       }
       return res.status(200).json(withDecryptedCode(card));
     }
 
-    if (!req.admin) {
-      return res.status(200).json(sanitizeCardForPublic(card));
-    }
-
-    return res.status(200).json(withDecryptedCode(card));
+    return res.status(200).json(sanitizeCardForPublic(card));
   } catch (err) {
     return handleError(err, res);
   }

@@ -23,21 +23,10 @@ const isSandbox = isSandboxMode();
 
 export const getPaginated = async (req, res) => {
   try {
-    const { admin } = req;
     const { isActive } = req.query;
     const { page, limit } = parsePagination(req.query.page, req.query.limit);
 
-    const filter = {};
-    if (admin) {
-      if (isActive === "true") {
-        filter.isActive = true;
-      }
-      if (isActive === "false") {
-        filter.isActive = false;
-      }
-    } else {
-      filter.isActive = true;
-    }
+    const filter = { isActive: true };
 
     const cardTypes = await CardType.aggregate([
       { $match: filter },
@@ -55,13 +44,6 @@ export const getPaginated = async (req, res) => {
           redeemFormat: 1,
           printImage: 1,
           showExpiryDateDay: 1,
-          ...(admin
-            ? {
-                createdAt: 1,
-                fulfillmentSource: 1,
-                isActive: 1,
-              }
-            : {}),
         },
       },
     ]);
@@ -83,17 +65,7 @@ export const getByCategory = async (req, res) => {
       return res.status(400).json({ code: "CARD_CATEGORY_ID_INVALID" });
     }
 
-    const filter = {};
-    if (req.admin) {
-      if (isActive === "true") {
-        filter.isActive = true;
-      }
-      if (isActive === "false") {
-        filter.isActive = false;
-      }
-    } else {
-      filter.isActive = true;
-    }
+    const filter = { isActive: true };
 
     const category = await CardCategory.findById(categoryId).select("name");
     if (!category) {
@@ -132,13 +104,6 @@ export const getByCategory = async (req, res) => {
           redeemFormat: 1,
           printImage: 1,
           showExpiryDateDay: 1,
-          ...(req.admin
-            ? {
-                createdAt: 1,
-                fulfillmentSource: 1,
-                isActive: 1,
-              }
-            : {}),
         },
       },
       ...(isPaginated
@@ -219,64 +184,54 @@ export const getOne = async (req, res) => {
           $expr: { $eq: ["$typeId", "$$typeId"] },
         },
       },
-    ];
-
-    if (!req.admin) {
-      tierPipeline.push({ $match: { isActive: true } });
-    }
-
-    tierPipeline.push(
-      ...(req.admin || !req.user
-        ? []
-        : [
+      { $match: { isActive: true } },
+      {
+        $lookup: {
+          from: "custome_pricing",
+          let: { tierId: "$_id" },
+          pipeline: [
             {
               $lookup: {
-                from: "custome_pricing",
-                let: { tierId: "$_id" },
-                pipeline: [
-                  {
-                    $lookup: {
-                      from: "card_tiers",
-                      localField: "_id",
-                      foreignField: "typeId",
-                      as: "tiers",
-                    },
-                  },
-                  {
-                    $addFields: {
-                      tiersCount: { $size: "$tiers" },
-                    },
-                  },
-                  { $unset: "tiers" },
-                  {
-                    $match: {
-                      $expr: {
-                        $and: [
-                          { $eq: ["$tierId", "$$tierId"] },
-                          {
-                            $eq: [
-                              "$userId",
-                              new mongoose.Types.ObjectId(req.user.id),
-                            ],
-                          },
-                        ],
-                      },
-                    },
-                  },
-                  { $limit: 1 },
-                ],
-                as: "customPricing",
+                from: "card_tiers",
+                localField: "_id",
+                foreignField: "typeId",
+                as: "tiers",
               },
             },
             {
               $addFields: {
-                buyPrice: {
-                  $ifNull: [{ $first: "$customPricing.buyPrice" }, "$buyPrice"],
+                tiersCount: { $size: "$tiers" },
+              },
+            },
+            { $unset: "tiers" },
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$tierId", "$$tierId"] },
+                    {
+                      $eq: [
+                        "$userId",
+                        new mongoose.Types.ObjectId(req.user.id),
+                      ],
+                    },
+                  ],
                 },
               },
             },
-            { $unset: "customPricing" },
-          ]),
+            { $limit: 1 },
+          ],
+          as: "customPricing",
+        },
+      },
+      {
+        $addFields: {
+          buyPrice: {
+            $ifNull: [{ $first: "$customPricing.buyPrice" }, "$buyPrice"],
+          },
+        },
+      },
+      { $unset: "customPricing" },
       {
         $lookup: {
           from: "cards",
@@ -316,13 +271,13 @@ export const getOne = async (req, res) => {
       },
       { $unset: "availableCards" },
       { $sort: { sellPrice: 1 } },
-    );
+    ];
 
     const cardTypes = await CardType.aggregate([
       {
         $match: {
           _id: new mongoose.Types.ObjectId(id),
-          isActive: req.admin ? { $exists: true } : true,
+          isActive: true,
         },
       },
       {
@@ -342,40 +297,28 @@ export const getOne = async (req, res) => {
     // Calculate effective buyPrice for each tier (for API response - end user sees this)
     let result = cardTypes[0];
     if (Array.isArray(result.tiers)) {
-      if (req.admin) {
-        // Admin sees original data (buyPrice + buyPriceUsd) for editing
-        result.tiers = result.tiers.map((tier) => tier);
-      } else {
-        // End users see calculated effective price only (hide buyPriceUsd)
-        result.tiers = result.tiers.map((tier) => {
-          const effectiveBuyPrice = getEffectiveBuyPrice(
-            tier.buyPrice,
-            tier.buyPriceUsd,
-            dollarRate,
-          );
-          // Return tier with calculated buyPrice, hide internal buyPriceUsd
-          const {
-            buyPriceUsd,
-            bambooProductId,
-            value,
-            isActive,
-            createdAt,
-            updatedAt,
-            ...tierWithoutPrivate
-          } = tier;
-          return {
-            ...tierWithoutPrivate,
-            buyPrice: effectiveBuyPrice,
-          };
-        });
-      }
-    }
-
-    if (!req.admin) {
-      delete result.fulfillmentSource;
-      delete result.isActive;
-      delete result.createdAt;
-      delete result.updatedAt;
+      // End users see calculated effective price only (hide buyPriceUsd)
+      result.tiers = result.tiers.map((tier) => {
+        const effectiveBuyPrice = getEffectiveBuyPrice(
+          tier.buyPrice,
+          tier.buyPriceUsd,
+          dollarRate,
+        );
+        // Return tier with calculated buyPrice, hide internal buyPriceUsd
+        const {
+          buyPriceUsd,
+          bambooProductId,
+          value,
+          isActive,
+          createdAt,
+          updatedAt,
+          ...tierWithoutPrivate
+        } = tier;
+        return {
+          ...tierWithoutPrivate,
+          buyPrice: effectiveBuyPrice,
+        };
+      });
     }
 
     return res.status(200).json(result);

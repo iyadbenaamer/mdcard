@@ -31,7 +31,7 @@ export const openApiSpec = {
     title: "MD Card API",
     version: "1.0.0",
     description:
-      "User-facing endpoints (routes without verifyAdmin). Use Bearer token in the Authorization header. Some endpoints behave differently in sandbox mode; see endpoint notes.",
+      "User-facing endpoints. Use Bearer token in the Authorization header. Some endpoints behave differently in sandbox mode; see endpoint notes.",
   },
   servers: [
     { url: "http://localhost:5000/api", description: "Local development" },
@@ -83,7 +83,7 @@ export const openApiSpec = {
         type: "object",
         properties: {
           valid: { type: "boolean" },
-          role: { type: "string", enum: ["user", "admin"] },
+          role: { type: "string", enum: ["user"] },
           id: { type: "string" },
         },
         required: ["valid", "role", "id"],
@@ -613,7 +613,7 @@ export const openApiSpec = {
       get: {
         tags: ["Card Types"],
         summary: "List card types by category",
-        description: "Returns active card types for non-admin users.",
+        description: "Returns active card types for users.",
         security: bearerAuth,
         parameters: [
           {
