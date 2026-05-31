@@ -103,6 +103,7 @@ export const signup = async (req, res) => {
       the code will be sent in the response for testing purposes
       */
       newUser.verificationStatus.isVerified = true;
+      newUser.isActive = true;
     }
     await newUser.save();
 
