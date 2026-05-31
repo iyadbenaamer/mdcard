@@ -93,18 +93,20 @@ export const signup = async (req, res) => {
     // sends the verification code to the user's phone number
     if (!isSandbox) {
       await sendCode(phone, verificationCode);
+      newUser.verificationStatus.token = verificationToken;
+      newUser.verificationStatus.remainingAttempts = MAX_CODE_ATTEMPTS;
+      newUser.verificationStatus.codesSentCount = 1;
+      newUser.verificationStatus.resendAfter = getNextResendAfter(0);
+    } else {
+      /*
+      if it's sandbox mode, the phone verification will be bypassed and 
+      the code will be sent in the response for testing purposes
+      */
+      newUser.verificationStatus.isVerified = true;
     }
-    newUser.verificationStatus.token = verificationToken;
-    newUser.verificationStatus.remainingAttempts = MAX_CODE_ATTEMPTS;
-    newUser.verificationStatus.codesSentCount = 1;
-    newUser.verificationStatus.resendAfter = getNextResendAfter(0);
     await newUser.save();
 
-    const responsePayload = { code: "AUTH_USER_CREATED" };
-    if (isSandbox) {
-      responsePayload.verificationCode = verificationCode;
-    }
-    return res.status(201).json(responsePayload);
+    return res.status(201).json({ code: "AUTH_USER_CREATED" });
   } catch (err) {
     return handleError(err, res);
   }

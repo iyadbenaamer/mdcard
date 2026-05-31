@@ -1,4 +1,7 @@
+import { isSandboxMode } from "../utils/sandbox.js";
+
 const bearerAuth = [{ bearerAuth: [] }];
+const isSandbox = isSandboxMode();
 const authErrorResponses = {
   401: {
     description: "Token expired",
@@ -33,9 +36,7 @@ export const openApiSpec = {
     description:
       "User-facing endpoints. Use Bearer token in the Authorization header. Some endpoints behave differently in sandbox mode; see endpoint notes.",
   },
-  servers: [
-    { url: "http://localhost:5000/api", description: "Local development" },
-  ],
+
   tags: [
     { name: "Auth", description: "Authentication and verification" },
     { name: "Users", description: "User profile" },
@@ -78,6 +79,13 @@ export const openApiSpec = {
           verificationCode: { type: "string" },
         },
         required: ["code", "isVerified"],
+      },
+      SignupResponse: {
+        type: "object",
+        properties: {
+          code: { type: "string" },
+        },
+        required: ["code"],
       },
       VerifyAccessResponse: {
         type: "object",
@@ -343,12 +351,74 @@ export const openApiSpec = {
     },
   },
   paths: {
+    ...(isSandbox
+      ? {
+          "/signup": {
+            post: {
+              tags: ["Auth"],
+              summary: "Create account",
+              description:
+                "Sandbox: no verification code will be sent and no verification process will be carried out; the account is created as verified.",
+              requestBody: {
+                required: true,
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string", example: "John Doe" },
+                        phone: { type: "string", example: "0912345678" },
+                        password: { type: "string", example: "string" },
+                      },
+                      required: ["name", "phone", "password"],
+                    },
+                  },
+                },
+              },
+              responses: {
+                201: {
+                  description: "Account created",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/SignupResponse" },
+                    },
+                  },
+                },
+                400: {
+                  description: "Missing required fields",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/ErrorResponse" },
+                    },
+                  },
+                },
+                409: {
+                  description: "Phone already registered",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/ErrorResponse" },
+                    },
+                  },
+                },
+                default: {
+                  description: "Error",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/ErrorResponse" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        }
+      : {}),
     "/login": {
       post: {
         tags: ["Auth"],
         summary: "Login",
         description:
-          "Sandbox: if verification is required, the response includes verificationCode and no SMS is sent.",
+          "Sandbox: the app will bypass phone verification and no SMS is sent.",
         requestBody: {
           required: true,
           content: {
