@@ -321,7 +321,9 @@ export const getOne = async (req, res) => {
       });
     }
 
-    return res.status(200).json(result);
+    const { fulfillmentSource, ...responseResult } = result;
+
+    return res.status(200).json(responseResult);
   } catch (err) {
     return handleError(err, res);
   }

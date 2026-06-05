@@ -124,14 +124,12 @@ const findDuplicateCodeInType = async (tierId, codeHash, excludeCardId) => {
   });
 };
 
-const createSandboxCardDocument = async ({ tierId, userId, provider }) => {
+const createSandboxCardDocument = async ({ tierId, userId }) => {
   if (!userId) {
     throw Object.assign(new Error("CARD_SOLD_USER_REQUIRED"), {
       code: "CARD_SOLD_USER_REQUIRED",
     });
   }
-
-  const resolvedProvider = provider === "bamboo" ? "bamboo" : "local";
 
   for (let attempt = 0; attempt < 10; attempt += 1) {
     const code = generateSandboxCardCode();
@@ -147,7 +145,6 @@ const createSandboxCardDocument = async ({ tierId, userId, provider }) => {
         serialNumber: generateRandomSerialNumber(),
         code: encryptCardCode(code),
         codeHash,
-        provider: resolvedProvider,
         status: "sold",
         soldTo: userId,
         soldAt: new Date(),
@@ -183,8 +180,8 @@ const createExternalCardDocument = async ({
   }
   const code = bambooCard?.code?.trim();
   if (!code) {
-    throw Object.assign(new Error("BAMBOO_CARD_CODE_MISSING"), {
-      code: "BAMBOO_CARD_CODE_MISSING",
+    throw Object.assign(new Error("CARD_CODE_MISSING"), {
+      code: "CARD_CODE_MISSING",
     });
   }
 
@@ -203,8 +200,8 @@ const createExternalCardDocument = async ({
       : String(bambooCard.pin).trim() || null;
   const externalExpiryDate = normalizeOptionalDate(bambooCard?.expiryDate);
   if (externalExpiryDate && externalExpiryDate.error) {
-    throw Object.assign(new Error("BAMBOO_EXPIRY_DATE_INVALID"), {
-      code: "BAMBOO_EXPIRY_DATE_INVALID",
+    throw Object.assign(new Error("CARD_EXPIRY_DATE_INVALID"), {
+      code: "CARD_EXPIRY_DATE_INVALID",
     });
   }
 
@@ -216,7 +213,6 @@ const createExternalCardDocument = async ({
       codeHash,
       pin: externalPin,
       expiryDate: externalExpiryDate,
-      provider: "bamboo",
       externalSerialNumber,
       externalOrderId: bambooOrderId ?? null,
       status: "sold",
@@ -240,176 +236,6 @@ const createExternalCardDocument = async ({
   throw Object.assign(new Error("CARD_SERIAL_NUMBER_TAKEN"), {
     code: "CARD_SERIAL_NUMBER_TAKEN",
   });
-};
-
-export const getAdminOrders = async (req, res) => {
-  try {
-    const {
-      userId,
-      userQuery,
-      provider,
-      minTotal,
-      maxTotal,
-      startDate,
-      endDate,
-      sortBy,
-      sortOrder,
-    } = req.query;
-    const { page, limit } = parsePagination(req.query.page, req.query.limit);
-
-    const filter = {};
-
-    if (userId) {
-      if (!Types.ObjectId.isValid(userId)) {
-        return res.status(400).json({ code: "ORDER_USER_INVALID" });
-      }
-      filter.userId = userId;
-    } else if (userQuery && userQuery.trim()) {
-      const users = await User.find(buildUserSearchFilter(userQuery))
-        .select("_id")
-        .limit(200);
-      const userIds = users.map((user) => user._id);
-      if (userIds.length === 0) {
-        return res.status(200).json({
-          orders: [],
-          pagination: {
-            page,
-            limit,
-            total: 0,
-            totalPages: 1,
-            hasMore: false,
-          },
-        });
-      }
-      filter.userId = { $in: userIds };
-    }
-
-    if (provider) {
-      if (!["local", "bamboo"].includes(provider)) {
-        return res.status(400).json({ code: "ORDER_PROVIDER_INVALID" });
-      }
-      filter["items.provider"] = provider;
-    }
-
-    const parsedMinTotal = parseAmount(minTotal);
-    const parsedMaxTotal = parseAmount(maxTotal);
-    if (parsedMinTotal !== null || parsedMaxTotal !== null) {
-      if (
-        (parsedMinTotal !== null && parsedMinTotal < 0) ||
-        (parsedMaxTotal !== null && parsedMaxTotal < 0)
-      ) {
-        return res.status(400).json({ code: "ORDER_TOTAL_INVALID" });
-      }
-      filter.totalAmount = {};
-      if (parsedMinTotal !== null) {
-        filter.totalAmount.$gte = parsedMinTotal;
-      }
-      if (parsedMaxTotal !== null) {
-        filter.totalAmount.$lte = parsedMaxTotal;
-      }
-    }
-
-    const normalizedStart = normalizeDate(startDate, false);
-    const normalizedEnd = normalizeDate(endDate, true);
-    if ((startDate && !normalizedStart) || (endDate && !normalizedEnd)) {
-      return res.status(400).json({ code: "ORDER_DATE_INVALID" });
-    }
-    if (normalizedStart || normalizedEnd) {
-      filter.createdAt = {};
-      if (normalizedStart) {
-        filter.createdAt.$gte = normalizedStart;
-      }
-      if (normalizedEnd) {
-        filter.createdAt.$lte = normalizedEnd;
-      }
-    }
-
-    const sortFieldMap = {
-      createdAt: "createdAt",
-      totalAmount: "totalAmount",
-    };
-    const resolvedSortField = sortFieldMap[sortBy];
-    const resolvedSortOrder = sortOrder === "asc" ? 1 : -1;
-
-    let ordersQuery = Order.find(filter)
-      .skip((page - 1) * limit)
-      .limit(limit)
-      .populate({ path: "userId", select: "name phone" });
-
-    if (resolvedSortField) {
-      ordersQuery = ordersQuery.sort({
-        [resolvedSortField]: resolvedSortOrder,
-        _id: 1,
-      });
-    }
-
-    const [orders, total] = await Promise.all([
-      ordersQuery,
-      Order.countDocuments(filter),
-    ]);
-
-    const totalPages = Math.max(1, Math.ceil(total / limit));
-    const payload = orders.map((order) => {
-      const orderObj = order.toObject();
-      const user =
-        orderObj.userId && typeof orderObj.userId === "object"
-          ? orderObj.userId
-          : null;
-      const items = Array.isArray(orderObj.items)
-        ? orderObj.items.map(({ cards, ...rest }) => rest)
-        : [];
-
-      return {
-        ...orderObj,
-        items,
-        user,
-        userId: user?._id ?? orderObj.userId,
-      };
-    });
-
-    return res.status(200).json({
-      orders: payload,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages,
-        hasMore: page < totalPages,
-      },
-    });
-  } catch (err) {
-    return handleError(err, res);
-  }
-};
-
-export const deleteAdminOrders = async (req, res) => {
-  try {
-    const ids = Array.isArray(req.body?.ids) ? req.body.ids : [];
-    const normalizedIds = [
-      ...new Set(ids.map((id) => String(id).trim())),
-    ].filter(Boolean);
-
-    if (normalizedIds.length === 0) {
-      return res.status(400).json({ code: "ORDER_IDS_REQUIRED" });
-    }
-
-    const invalidIds = normalizedIds.filter(
-      (id) => !Types.ObjectId.isValid(id),
-    );
-    if (invalidIds.length) {
-      return res.status(400).json({ code: "ORDER_ID_INVALID" });
-    }
-
-    const result = await Order.deleteMany({
-      _id: { $in: normalizedIds },
-    });
-
-    return res.status(200).json({
-      deleted: result.deletedCount || 0,
-    });
-  } catch (err) {
-    return handleError(err, res);
-  }
 };
 
 export const checkoutCart = async (req, res) => {
@@ -620,7 +446,6 @@ export const checkoutCart = async (req, res) => {
           const createdCard = await createSandboxCardDocument({
             tierId: item.tierId,
             userId: user._id,
-            provider: item.fulfillmentSource,
           });
           createdCards.push(createdCard);
           trackReserved([createdCard]);
@@ -631,7 +456,6 @@ export const checkoutCart = async (req, res) => {
           title: item.tierTitle,
           price: item.buyPrice,
           quantity: item.requested,
-          provider: item.fulfillmentSource === "bamboo" ? "bamboo" : "local",
           externalOrderId: null,
           cards: createdCards.map((card) => card._id),
         });
@@ -649,7 +473,6 @@ export const checkoutCart = async (req, res) => {
             tierId: item.tierId,
             requested: item.requested,
             available: reserved.length,
-            provider: "local",
             code: "LOCAL_OUT_OF_STOCK",
           });
           return await cancelCheckout(failureDetails);
@@ -686,8 +509,7 @@ export const checkoutCart = async (req, res) => {
               tierId: item.tierId,
               requested: remainingRequested,
               available: 0,
-              provider: "bamboo",
-              code: "BAMBOO_PRODUCT_MISSING",
+              code: "PRODUCT_MISSING",
             });
             return await cancelCheckout(failureDetails);
           }
@@ -700,8 +522,7 @@ export const checkoutCart = async (req, res) => {
               tierId: item.tierId,
               requested: remainingRequested,
               available: 0,
-              provider: "bamboo",
-              code: "BAMBOO_VALUE_INVALID",
+              code: "VALUE_INVALID",
             });
             return await cancelCheckout(failureDetails);
           }
@@ -721,13 +542,12 @@ export const checkoutCart = async (req, res) => {
               },
             });
           } catch (err) {
-            if (err?.code === "BAMBOO_OUT_OF_STOCK") {
+            if (err?.code === "OUT_OF_STOCK") {
               failureDetails.push({
                 tierId: item.tierId,
                 requested: remainingRequested,
                 available: Number(err.available ?? 0),
-                provider: "bamboo",
-                code: "BAMBOO_OUT_OF_STOCK",
+                code: "OUT_OF_STOCK",
                 message: err.providerMessage || null,
               });
               return await cancelCheckout(failureDetails);
@@ -746,8 +566,7 @@ export const checkoutCart = async (req, res) => {
               tierId: item.tierId,
               requested: remainingRequested,
               available: bambooCards.length,
-              provider: "bamboo",
-              code: "BAMBOO_INCOMPLETE_ORDER",
+              code: "INCOMPLETE_ORDER",
             });
             return await cancelCheckout(failureDetails);
           }
@@ -768,8 +587,7 @@ export const checkoutCart = async (req, res) => {
               tierId: item.tierId,
               requested: remainingRequested,
               available: 0,
-              provider: "bamboo",
-              code: "BAMBOO_CARD_PERSIST_FAILED",
+              code: "CARD_PERSIST_FAILED",
             });
             return await cancelCheckout(failureDetails);
           }
@@ -785,8 +603,7 @@ export const checkoutCart = async (req, res) => {
             tierId: item.tierId,
             requested: item.requested,
             available: itemCardIds.length,
-            provider: "bamboo",
-            code: "BAMBOO_INCOMPLETE_ORDER",
+            code: "INCOMPLETE_ORDER",
           });
           return await cancelCheckout(failureDetails);
         }
@@ -820,7 +637,7 @@ export const checkoutCart = async (req, res) => {
       totalAmount: totalCost,
       items: orderItems,
     });
-    const savedOrder = await order.save();
+    let savedOrder = await order.save();
 
     const transaction = new Transaction({
       userId: user._id,
@@ -833,6 +650,16 @@ export const checkoutCart = async (req, res) => {
     await transaction.save();
 
     const purchasedCards = reservedCards.map(withDecryptedCode);
+
+    savedOrder = {
+      ...savedOrder.toObject(),
+      items: savedOrder.items.map((item) => {
+        const { provider, externalOrderId, cards, ...rest } = item.toObject();
+        return {
+          ...rest,
+        };
+      }),
+    };
 
     return res.status(201).json({
       cards: purchasedCards,
