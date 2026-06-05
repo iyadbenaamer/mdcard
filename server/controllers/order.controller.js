@@ -102,7 +102,7 @@ const normalizeOptionalDate = (value) => {
 };
 
 const withDecryptedCode = (card) => {
-  const data = card.toObject();
+  const data = card;
   data.code = decryptCardCode(data.code);
   return data;
 };
@@ -244,10 +244,12 @@ export const checkoutCart = async (req, res) => {
   const sandboxCreatedIdSet = new Set();
 
   const trackReserved = (cards) => {
-    for (const card of cards) {
+    for (let card of cards) {
+      const { provider, externalSerialNumber, externalOrderId, ...rest } =
+        card.toObject();
       const cardId = card._id;
       reservedCardIds.push(cardId);
-      reservedCards.push(card);
+      reservedCards.push({ _id: cardId, ...rest });
       if (isSandbox) {
         sandboxCreatedIdSet.add(String(cardId));
       }
@@ -335,7 +337,10 @@ export const checkoutCart = async (req, res) => {
         path: "typeId",
         select: "fulfillmentSource name isActive",
       });
-      if (!tier || tier.isActive === false || tier.isAvailable === false) {
+      if (!tier) {
+        return res.status(404).json({ code: "CARD_TIER_NOT_FOUND", tierId });
+      }
+      if (tier.isActive === false || tier.isAvailable === false) {
         availabilityIssues.push({ tierId, requested, available: 0 });
         continue;
       }
