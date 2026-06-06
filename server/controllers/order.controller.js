@@ -130,7 +130,6 @@ const serializeOrderItemTier = (item, type) =>
   item?.tierId
     ? {
         _id: item.tierId._id,
-        title: item.tierId.title,
         typeId: type
           ? {
               _id: type._id,
@@ -763,10 +762,6 @@ export const checkoutCart = async (req, res) => {
 
 export const getOrders = async (req, res) => {
   try {
-    if (!req.user) {
-      return res.status(403).json({ code: "AUTH_USER_REQUIRED" });
-    }
-
     const { page, limit } = parsePagination(req.query.page, req.query.limit);
     const filter = { userId: req.user.id };
 
