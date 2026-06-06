@@ -5,7 +5,6 @@ const { ObjectId } = Types;
 const orderItemSchema = new Schema(
   {
     tierId: { type: ObjectId, ref: "CardTier", required: true },
-    title: { type: String, required: true },
     price: { type: Number, required: true, min: 0 },
     quantity: { type: Number, required: true, min: 1 },
     provider: { type: String, enum: ["local", "bamboo"], default: "local" },

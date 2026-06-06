@@ -107,6 +107,80 @@ const withDecryptedCode = (card) => {
   return data;
 };
 
+const populateOrderQuery = (query) =>
+  query.populate([
+    {
+      path: "items.cards",
+      model: "Card",
+    },
+    {
+      path: "items.tierId",
+      model: "CardTier",
+      populate: {
+        path: "typeId",
+        model: "CardType",
+      },
+    },
+  ]);
+
+const getTierFromOrderItem = (item) =>
+  item?.tierId && typeof item.tierId === "object" ? item.tierId : null;
+
+const serializeOrderItemTier = (item, type) =>
+  item?.tierId
+    ? {
+        _id: item.tierId._id,
+        title: item.tierId.title,
+        typeId: type
+          ? {
+              _id: type._id,
+              name: type.name,
+              redeemFormat: type.redeemFormat ?? null,
+              image: type.image ?? null,
+              printImage: type.printImage ?? null,
+              showExpiryDateDay: type.showExpiryDateDay ?? null,
+            }
+          : null,
+      }
+    : null;
+
+const serializeOrderItem = (item, { includeCards = false } = {}) => {
+  const tier = getTierFromOrderItem(item);
+  const type =
+    tier?.typeId && typeof tier.typeId === "object" ? tier.typeId : null;
+  const cards = Array.isArray(item?.cards) ? item.cards : [];
+
+  const payload = {
+    tierId: serializeOrderItemTier(item, type),
+    title: tier?.title ?? item?.title ?? null,
+    price: item?.price,
+    quantity: item?.quantity,
+  };
+
+  if (includeCards) {
+    payload.cards = cards.map((card) => {
+      if (!card || typeof card !== "object") {
+        return card ? { _id: card } : card;
+      }
+
+      const decryptedCode = card.code
+        ? decryptCardCode(card.code)
+        : (card.code ?? null);
+
+      return {
+        _id: card._id,
+        serialNumber: card.serialNumber ?? null,
+        code: decryptedCode,
+        pin: card.pin ?? null,
+        expiryDate: card.expiryDate ?? null,
+        redeemFormat: type?.redeemFormat || null,
+      };
+    });
+  }
+
+  return payload;
+};
+
 const findDuplicateCodeInType = async (tierId, codeHash, excludeCardId) => {
   const tier = await CardTier.findById(tierId).select("typeId");
   if (!tier) {
@@ -458,7 +532,6 @@ export const checkoutCart = async (req, res) => {
 
         orderItems.push({
           tierId: item.tierId,
-          title: item.tierTitle,
           price: item.buyPrice,
           quantity: item.requested,
           externalOrderId: null,
@@ -485,7 +558,6 @@ export const checkoutCart = async (req, res) => {
 
         orderItems.push({
           tierId: item.tierId,
-          title: item.tierTitle,
           price: item.buyPrice,
           quantity: item.requested,
           provider: "local",
@@ -615,7 +687,6 @@ export const checkoutCart = async (req, res) => {
 
         orderItems.push({
           tierId: item.tierId,
-          title: item.tierTitle,
           price: item.buyPrice,
           quantity: item.requested,
           provider:
@@ -656,14 +727,21 @@ export const checkoutCart = async (req, res) => {
 
     const purchasedCards = reservedCards.map(withDecryptedCode);
 
+    const populatedOrder = await populateOrderQuery(
+      Order.findById(savedOrder._id),
+    );
+
     savedOrder = {
-      ...savedOrder.toObject(),
-      items: savedOrder.items.map((item) => {
-        const { provider, externalOrderId, cards, ...rest } = item.toObject();
-        return {
-          ...rest,
-        };
-      }),
+      ...populatedOrder.toObject(),
+      items: Array.isArray(populatedOrder.items)
+        ? populatedOrder.items.map((item) => {
+            const { provider, externalOrderId, cards, ...rest } =
+              item.toObject();
+            return {
+              ...serializeOrderItem(rest),
+            };
+          })
+        : [],
     };
 
     return res.status(201).json({
@@ -693,24 +771,12 @@ export const getOrders = async (req, res) => {
     const filter = { userId: req.user.id };
 
     const [orders, total] = await Promise.all([
-      Order.find(filter)
-        .sort({ createdAt: -1 })
-        .skip((page - 1) * limit)
-        .limit(limit)
-        .populate([
-          {
-            path: "items.cards",
-            model: "Card",
-          },
-          {
-            path: "items.tierId",
-            model: "CardTier",
-            populate: {
-              path: "typeId",
-              model: "CardType",
-            },
-          },
-        ]),
+      populateOrderQuery(
+        Order.find(filter)
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * limit)
+          .limit(limit),
+      ),
       Order.countDocuments(filter),
     ]);
 
@@ -722,33 +788,7 @@ export const getOrders = async (req, res) => {
         _id: orderObj._id,
         totalAmount: orderObj.totalAmount,
         createdAt: orderObj.createdAt,
-        items: items.map((item) => {
-          const tier =
-            item?.tierId && typeof item.tierId === "object"
-              ? item.tierId
-              : null;
-          const type =
-            tier?.typeId && typeof tier.typeId === "object"
-              ? tier.typeId
-              : null;
-
-          return {
-            tierId: tier
-              ? {
-                  _id: tier._id,
-                  typeId: type
-                    ? {
-                        _id: type._id,
-                        name: type.name,
-                      }
-                    : null,
-                }
-              : null,
-            title: item?.title,
-            price: item?.price,
-            quantity: item?.quantity,
-          };
-        }),
+        items: items.map((item) => serializeOrderItem(item)),
       };
     });
 
@@ -774,23 +814,12 @@ export const getOrderById = async (req, res) => {
     if (!req.user) {
       return res.status(403).json({ code: "AUTH_USER_REQUIRED" });
     }
-    const order = await Order.findOne({
-      _id: id,
-      userId: req.user.id,
-    }).populate([
-      {
-        path: "items.cards",
-        model: "Card",
-      },
-      {
-        path: "items.tierId",
-        model: "CardTier",
-        populate: {
-          path: "typeId",
-          model: "CardType",
-        },
-      },
-    ]);
+    const order = await populateOrderQuery(
+      Order.findOne({
+        _id: id,
+        userId: req.user.id,
+      }),
+    );
 
     if (!order) {
       return res.status(404).json({ code: "ORDER_NOT_FOUND" });
@@ -803,53 +832,9 @@ export const getOrderById = async (req, res) => {
       _id: orderObj._id,
       totalAmount: orderObj.totalAmount,
       createdAt: orderObj.createdAt,
-      items: items.map((item) => {
-        const tier =
-          item?.tierId && typeof item.tierId === "object" ? item.tierId : null;
-        const type =
-          tier?.typeId && typeof tier.typeId === "object" ? tier.typeId : null;
-        const cards = Array.isArray(item?.cards) ? item.cards : [];
-
-        return {
-          tierId: tier
-            ? {
-                _id: tier._id,
-                title: tier.title,
-                typeId: type
-                  ? {
-                      _id: type._id,
-                      name: type.name,
-                      redeemFormat: type.redeemFormat ?? null,
-                      image: type.image ?? null,
-                      printImage: type.printImage ?? null,
-                      showExpiryDateDay: type.showExpiryDateDay ?? null,
-                    }
-                  : null,
-              }
-            : null,
-          title: item?.title,
-          price: item?.price,
-          quantity: item?.quantity,
-          cards: cards.map((card) => {
-            if (!card || typeof card !== "object") {
-              return card ? { _id: card } : card;
-            }
-
-            const decryptedCode = card.code
-              ? decryptCardCode(card.code)
-              : (card.code ?? null);
-
-            return {
-              _id: card._id,
-              serialNumber: card.serialNumber ?? null,
-              code: decryptedCode,
-              pin: card.pin ?? null,
-              expiryDate: card.expiryDate ?? null,
-              redeemFormat: type?.redeemFormat || null,
-            };
-          }),
-        };
-      }),
+      items: items.map((item) =>
+        serializeOrderItem(item, { includeCards: true }),
+      ),
     };
 
     return res.status(200).json(payload);
