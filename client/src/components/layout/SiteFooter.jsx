@@ -1,6 +1,6 @@
 import appLogo from "assets/logo-white.png";
 import { Link } from "react-router-dom";
-function SiteFooter({ mdzoneLogo, footer, language = "ar" }) {
+function SiteFooter({ alamerLogo, footer, language = "ar" }) {
   const termsLabel =
     language === "ar" ? "الشروط والأحكام" : "Terms and Conditions";
   const privacyLabel =
@@ -18,7 +18,7 @@ function SiteFooter({ mdzoneLogo, footer, language = "ar" }) {
               className="h-10 w-auto rounded-md"
             />
             <img
-              src={mdzoneLogo}
+              src={alamerLogo}
               alt="Al-Amer LLC"
               loading="lazy"
               className="h-40 w-auto rounded-md"

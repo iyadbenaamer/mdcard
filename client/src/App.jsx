@@ -13,7 +13,7 @@ import Privacy from "./pages/Privacy";
 import { useLanguage } from "./contexts/LanguageContext";
 import { Routes, Route } from "react-router-dom";
 
-import mdzoneLogo from "./assets/mdzone.png";
+import alamerLogo from "./assets/alamer.png";
 
 function App() {
   const { language, setLanguage } = useLanguage();
@@ -64,7 +64,7 @@ function App() {
       </main>
 
       <SiteFooter
-        mdzoneLogo={mdzoneLogo}
+        alamerLogo={alamerLogo}
         footer={t.footer}
         language={language}
       />
