@@ -20,7 +20,7 @@ export const content = {
     },
     homeAbout: {
       title: "من نحن",
-      text: "MD Zone إحدى شركات MD Card، متخصصة في توزيع كروت الدفع المسبق المحلية والدولية عبر شبكة واسعة من نقاط البيع. نعمل على تمكين المحلات التجارية من تقديم خدمات الشحن والبطاقات الرقمية لعملائها بسهولة وكفاءة عالية.",
+      text: "MD Card إحدى شركات العامر، متخصصة في توزيع كروت الدفع المسبق المحلية والدولية عبر شبكة واسعة من نقاط البيع. نعمل على تمكين المحلات التجارية من تقديم خدمات الشحن والبطاقات الرقمية لعملائها بسهولة وكفاءة عالية.",
     },
     homeServices: {
       title: "خدماتنا",
@@ -51,7 +51,7 @@ export const content = {
     aboutPage: {
       title: "من نحن",
       body: [
-        "MD Card هي شركة متخصصة في توزيع كروت الدفع المسبق المحلية والدولية، وتعمل تحت مظلة MD Zone. تأسست الشركة بهدف تطوير قطاع الخدمات الرقمية وتسهيل وصول المحلات التجارية إلى حلول بيع حديثة وآمنة.",
+        "MD Card هي شركة متخصصة في توزيع كروت الدفع المسبق المحلية والدولية، وتعمل تحت مظلة شركة العامر. تأسست الشركة بهدف تطوير قطاع الخدمات الرقمية وتسهيل وصول المحلات التجارية إلى حلول بيع حديثة وآمنة.",
         "نحن لا نقدم مجرد منتج، بل نوفر نظام توزيع متكامل يعتمد على أجهزة نقاط البيع (POS)، مما يمنح شركاءنا القدرة على خدمة عملائهم بكفاءة عالية وسرعة في التنفيذ.",
         "نؤمن بأن التحول الرقمي هو مستقبل التجارة، ولذلك نعمل باستمرار على تطوير أنظمتنا وتوسيع شبكتنا لضمان أفضل تجربة لشركائنا في السوق الليبي.",
       ],
@@ -106,7 +106,7 @@ export const content = {
     },
     footer: {
       short:
-        "MD Card إحدى شركات MD Zone، متخصصة في توزيع كروت الدفع المسبق المحلية والدولية عبر شبكة نقاط بيع حديثة داخل ليبيا، مع التزام كامل بالسرعة والموثوقية والاحترافية.",
+        "MD Card إحدى شركات العامر، متخصصة في توزيع كروت الدفع المسبق المحلية والدولية عبر شبكة نقاط بيع حديثة داخل ليبيا، مع التزام كامل بالسرعة والموثوقية والاحترافية.",
       rights: "جميع الحقوق محفوظة",
     },
   },
@@ -130,7 +130,7 @@ export const content = {
     },
     homeAbout: {
       title: "Who We Are",
-      text: "MD Zone, one of MD Card companies, specializes in distributing local and international prepaid cards through a wide POS network. We enable shops to deliver top-up and digital card services with ease and high efficiency.",
+      text: "MD Card, one of Al-Amer LLC companies, specializes in distributing local and international prepaid cards through a wide POS network. We enable shops to deliver top-up and digital card services with ease and high efficiency.",
     },
     homeServices: {
       title: "Our Services",
@@ -161,7 +161,7 @@ export const content = {
     aboutPage: {
       title: "About Us",
       body: [
-        "MD Card is a company specialized in distributing local and international prepaid cards under the umbrella of MD Zone. The company was founded to develop digital services and simplify access to modern, secure retail solutions.",
+        "MD Card is a company specialized in distributing local and international prepaid cards under the umbrella of Al-Amer LLC. The company was founded to develop digital services and simplify access to modern, secure retail solutions.",
         "We provide more than just a product. We deliver an integrated distribution system powered by POS devices, enabling our partners to serve customers efficiently and quickly.",
         "We believe digital transformation is the future of commerce, so we continuously improve our systems and expand our network to deliver the best partner experience in the Libyan market.",
       ],
@@ -216,7 +216,7 @@ export const content = {
     },
     footer: {
       short:
-        "MD Card, one of MD Zone companies, specializes in distributing local and international prepaid cards through a modern POS network in Libya, with full commitment to speed, reliability, and professionalism.",
+        "MD Card, one of Al-Amer LLC companies, specializes in distributing local and international prepaid cards through a modern POS network in Libya, with full commitment to speed, reliability, and professionalism.",
       rights: "All rights reserved",
     },
   },

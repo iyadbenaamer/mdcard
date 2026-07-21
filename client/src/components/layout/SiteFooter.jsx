@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 function SiteFooter({ mdzoneLogo, footer, language = "ar" }) {
   const termsLabel =
     language === "ar" ? "الشروط والأحكام" : "Terms and Conditions";
+  const privacyLabel =
+    language === "ar" ? "سياسة الخصوصية" : "Privacy Policy";
 
   return (
     <footer className="relative overflow-hidden bg-slate-950/80">
@@ -17,7 +19,7 @@ function SiteFooter({ mdzoneLogo, footer, language = "ar" }) {
             />
             <img
               src={mdzoneLogo}
-              alt="MD Zone"
+              alt="Al-Amer LLC"
               loading="lazy"
               className="h-40 w-auto rounded-md"
             />
@@ -27,12 +29,20 @@ function SiteFooter({ mdzoneLogo, footer, language = "ar" }) {
             {footer.short}
           </p>
           <div className="mt-4">
-            <Link
-              to="/terms"
-              className="text-sm text-slate-300 hover:text-white underline"
-            >
-              {termsLabel}
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link
+                to="/terms"
+                className="text-sm text-slate-300 underline hover:text-white"
+              >
+                {termsLabel}
+              </Link>
+              <Link
+                to="/privacy"
+                className="text-sm text-slate-300 underline hover:text-white"
+              >
+                {privacyLabel}
+              </Link>
+            </div>
           </div>
           <p className="mt-6 text-center text-xs text-slate-300">
             © {new Date().getFullYear()} MD Card - {footer.rights}
