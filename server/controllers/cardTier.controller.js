@@ -328,7 +328,7 @@ export const checkAvailability = async (req, res) => {
             ? requested
             : await Card.countDocuments({
                 tierId,
-                status: "available",
+                soldTo: null,
               });
         return { tierId, requested, available: Math.min(requested, available) };
       }),

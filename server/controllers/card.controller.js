@@ -89,23 +89,16 @@ const withDecryptedCode = (card) => {
 
 export const getPaginated = async (req, res) => {
   try {
-    const { tierId, status, soldTo, serialNumber } = req.query;
+    const { tierId, soldTo, serialNumber } = req.query;
     const { page, limit } = parsePagination(req.query.page, req.query.limit);
 
-    const filter = { status: "available" };
+    const filter = { soldTo: null };
 
     if (tierId) {
       if (!mongoose.Types.ObjectId.isValid(tierId)) {
         return res.status(400).json({ code: "CARD_TIER_ID_INVALID" });
       }
       filter.tierId = tierId;
-    }
-
-    if (status) {
-      if (!["available", "sold"].includes(status)) {
-        return res.status(400).json({ code: "CARD_STATUS_INVALID" });
-      }
-      filter.status = status;
     }
 
     if (soldTo) {
@@ -141,20 +134,16 @@ export const getPaginated = async (req, res) => {
 
 export const getByCategory = async (req, res) => {
   try {
-    const { categoryId, status, sortBy, sortOrder, serialNumber } = req.query;
+    const { categoryId, sortBy, sortOrder, serialNumber } = req.query;
     const { page, limit } = parsePagination(req.query.page, req.query.limit);
 
     if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
       return res.status(400).json({ code: "CARD_CATEGORY_ID_INVALID" });
     }
 
-    if (status && !["available", "sold"].includes(status)) {
-      return res.status(400).json({ code: "CARD_STATUS_INVALID" });
-    }
-
     const allowedSortFields = new Set([
       "serialNumber",
-      "status",
+      "isSold",
       "createdAt",
       "typeName",
       "tierTitle",
@@ -162,13 +151,12 @@ export const getByCategory = async (req, res) => {
     const sortField = allowedSortFields.has(sortBy) ? sortBy : "serialNumber";
     const sortDirection = sortOrder === "desc" ? -1 : 1;
 
-    const matchStatus = status ? { status } : {};
     const matchSerial = serialNumber
       ? { serialNumber: serialNumber.trim() }
       : {};
 
     const pipeline = [
-      { $match: { ...matchStatus, ...matchSerial } },
+      { $match: { ...matchSerial } },
       {
         $lookup: {
           from: "card_tiers",
@@ -196,7 +184,7 @@ export const getByCategory = async (req, res) => {
         $project: {
           serialNumber: 1,
           code: 1,
-          status: 1,
+          isSold: { $ne: ["$soldTo", null] },
           tierTitle: "$tier.title",
           typeName: "$type.name",
           createdAt: 1,
@@ -242,8 +230,8 @@ export const getOne = async (req, res) => {
       return res.status(404).json({ code: "CARD_NOT_FOUND" });
     }
 
-    if (card.status === "sold") {
-      if (!req.user || !card.soldTo || card.soldTo.toString() !== req.user.id) {
+    if (card.soldTo) {
+      if (!req.user || card.soldTo.toString() !== req.user.id) {
         return res.status(404).json({ code: "CARD_NOT_FOUND" });
       }
       return res.status(200).json(withDecryptedCode(card));
@@ -258,16 +246,8 @@ export const getOne = async (req, res) => {
 export const updateOne = async (req, res) => {
   try {
     const { id } = req.query;
-    let {
-      tierId,
-      serialNumber,
-      code,
-      pin,
-      expiryDate,
-      status,
-      soldTo,
-      soldAt,
-    } = req.body;
+    let { tierId, serialNumber, code, pin, expiryDate, soldTo, soldAt } =
+      req.body;
 
     const card = await Card.findById(id);
     if (!card) {
@@ -359,13 +339,6 @@ export const updateOne = async (req, res) => {
       }
     }
 
-    if (status !== undefined) {
-      if (!["available", "sold"].includes(status)) {
-        return res.status(400).json({ code: "CARD_STATUS_INVALID" });
-      }
-      card.status = status;
-    }
-
     if (soldTo !== undefined) {
       if (soldTo === null || soldTo === "") {
         card.soldTo = null;
@@ -393,16 +366,8 @@ export const updateOne = async (req, res) => {
 
 export const createOne = async (req, res) => {
   try {
-    let {
-      tierId,
-      serialNumber,
-      code,
-      pin,
-      expiryDate,
-      status,
-      soldTo,
-      soldAt,
-    } = req.body;
+    let { tierId, serialNumber, code, pin, expiryDate, soldTo, soldAt } =
+      req.body;
 
     if (!tierId || !code) {
       return res.status(400).json({ code: "CARD_REQUIRED_FIELDS_MISSING" });
@@ -450,12 +415,6 @@ export const createOne = async (req, res) => {
       return res.status(409).json({ code: "CARD_CODE_DUPLICATE" });
     }
 
-    if (status !== undefined) {
-      if (!["available", "sold"].includes(status)) {
-        return res.status(400).json({ code: "CARD_STATUS_INVALID" });
-      }
-    }
-
     if (soldTo !== undefined) {
       if (soldTo === null || soldTo === "") {
         soldTo = null;
@@ -486,7 +445,6 @@ export const createOne = async (req, res) => {
         codeHash,
         pin,
         expiryDate: normalizedExpiryDate,
-        status,
         soldTo,
         soldAt,
       });
@@ -582,7 +540,6 @@ export const importFromExcel = async (req, res) => {
           serialNumber,
           code: encryptCardCode(normalizedCode),
           codeHash,
-          status: "available",
         });
         try {
           await card.save();

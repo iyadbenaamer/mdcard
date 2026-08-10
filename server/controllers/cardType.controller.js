@@ -250,7 +250,7 @@ export const getOne = async (req, res) => {
                 $expr: {
                   $and: [
                     { $eq: ["$tierId", "$$tierId"] },
-                    { $eq: ["$status", "available"] },
+                    { $eq: ["$soldTo", null] },
                   ],
                 },
               },

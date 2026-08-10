@@ -26,8 +26,8 @@ export const getStats = async (req, res) => {
       User.countDocuments(),
       User.countDocuments({ createdAt: { $gte: sevenDaysAgo } }),
       Card.countDocuments(),
-      Card.countDocuments({ status: "available" }),
-      Card.countDocuments({ status: "sold" }),
+      Card.countDocuments({ soldTo: null }),
+      Card.countDocuments({ soldTo: { $ne: null } }),
       CardType.countDocuments(),
       CardType.countDocuments({ isActive: true }),
       Transaction.countDocuments({
@@ -41,7 +41,7 @@ export const getStats = async (req, res) => {
     ]);
 
     const topSoldTypeAgg = await Card.aggregate([
-      { $match: { status: "sold", tierId: { $ne: null } } },
+      { $match: { soldTo: { $ne: null }, tierId: { $ne: null } } },
       { $group: { _id: "$tierId", soldCount: { $sum: 1 } } },
       { $sort: { soldCount: -1 } },
       { $limit: 1 },

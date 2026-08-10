@@ -17,11 +17,6 @@ const cardSchema = new Schema(
     },
     externalSerialNumber: { type: String, default: null },
     externalOrderId: { type: String, default: null, index: true },
-    status: {
-      type: String,
-      enum: ["available", "sold"],
-      default: "available",
-    },
     soldTo: { type: ObjectId, ref: "User", default: null },
     soldAt: { type: Date, default: null },
   },

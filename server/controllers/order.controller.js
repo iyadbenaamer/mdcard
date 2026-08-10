@@ -221,7 +221,6 @@ const createSandboxCardDocument = async ({ tierId, userId }) => {
         serialNumber: generateRandomSerialNumber(),
         code: encryptCardCode(code),
         codeHash,
-        status: "sold",
         soldTo: userId,
         soldAt: new Date(),
       });
@@ -291,7 +290,6 @@ const createExternalCardDocument = async ({
       expiryDate: externalExpiryDate,
       externalSerialNumber,
       externalOrderId: bambooOrderId ?? null,
-      status: "sold",
       soldTo: userId,
       soldAt: new Date(),
     };
@@ -348,7 +346,7 @@ export const checkoutCart = async (req, res) => {
 
     await Card.updateMany(
       { _id: { $in: remainingIds } },
-      { status: "available", soldTo: null, soldAt: null },
+      { soldTo: null, soldAt: null },
     );
   };
 
@@ -425,7 +423,7 @@ export const checkoutCart = async (req, res) => {
       if (fulfillmentSource === "local" && !isSandbox) {
         const localAvailable = await Card.countDocuments({
           tierId,
-          status: "available",
+          soldTo: null,
         });
         if (localAvailable < requested) {
           availabilityIssues.push({
@@ -504,8 +502,8 @@ export const checkoutCart = async (req, res) => {
 
       for (let i = 0; i < quantity; i += 1) {
         const card = await Card.findOneAndUpdate(
-          { tierId, status: "available" },
-          { status: "sold", soldTo: user._id, soldAt },
+          { tierId, soldTo: null },
+          { soldTo: user._id, soldAt },
           { returnDocument: "after", sort: { createdAt: 1 } },
         );
         if (!card) {

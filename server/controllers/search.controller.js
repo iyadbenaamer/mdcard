@@ -129,7 +129,7 @@ export const searchCards = async (req, res) => {
 
     const allowedSortFields = new Set([
       "serialNumber",
-      "status",
+      "isSold",
       "createdAt",
       "typeName",
       "tierTitle",
@@ -173,7 +173,7 @@ export const searchCards = async (req, res) => {
         $project: {
           serialNumber: 1,
           code: 1,
-          status: 1,
+          isSold: { $ne: ["$soldTo", null] },
           createdAt: 1,
           tierTitle: "$tier.title",
           typeName: "$type.name",
