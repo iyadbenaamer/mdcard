@@ -15,6 +15,7 @@ export const get = async (req, res) => {
       profile: {
         name: user.name,
         phone: user.phone,
+        role: user.role || "business",
         balance: user.balance,
         isActive: user.isActive,
         canBuy: user.canBuy,
@@ -50,6 +51,7 @@ export const update = async (req, res) => {
       id: user._id,
       name: user.name,
       phone: user.phone,
+      role: user.role || "business",
       balance: user.balance,
       isActive: user.isActive,
       canBuy: user.canBuy,

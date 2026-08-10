@@ -91,7 +91,7 @@ export const openApiSpec = {
         type: "object",
         properties: {
           valid: { type: "boolean" },
-          role: { type: "string", enum: ["user"] },
+          role: { type: "string", enum: ["business", "individual"] },
           id: { type: "string" },
         },
         required: ["valid", "role", "id"],
@@ -109,6 +109,7 @@ export const openApiSpec = {
           id: { type: "string" },
           phone: { type: "string" },
           name: { type: "string" },
+          role: { type: "string", enum: ["business", "individual"] },
           balance: { type: "number" },
           isActive: { type: "boolean" },
           canBuy: { type: "boolean" },
@@ -358,7 +359,7 @@ export const openApiSpec = {
               tags: ["Auth"],
               summary: "Create account",
               description:
-                "Sandbox: no verification code will be sent and no verification process will be carried out; the account is created as verified.",
+                "Sandbox: no verification code will be sent, no verification process will be carried out, and accounts are always created as active business accounts.",
               requestBody: {
                 required: true,
                 content: {
@@ -369,8 +370,13 @@ export const openApiSpec = {
                         name: { type: "string", example: "John Doe" },
                         phone: { type: "string", example: "0912345678" },
                         password: { type: "string", example: "string" },
+                        role: {
+                          type: "string",
+                          enum: ["business", "individual"],
+                          example: "individual",
+                        },
                       },
-                      required: ["name", "phone", "password"],
+                      required: ["name", "phone", "password", "role"],
                     },
                   },
                 },

@@ -69,10 +69,15 @@ export const search = async (req, res) => {
     }
 
     const users = await User.find(buildUserSearchFilter(query))
-      .select("name phone createdAt isActive")
+      .select("name phone role createdAt isActive")
       .sort({ createdAt: -1 })
       .limit(50);
-    return res.json(users);
+    return res.json(
+      users.map((user) => ({
+        ...user.toObject(),
+        role: user.role || "business",
+      })),
+    );
   } catch (err) {
     return handleError(err, res);
   }

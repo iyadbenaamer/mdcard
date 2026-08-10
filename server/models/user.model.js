@@ -16,6 +16,12 @@ const userSchema = new Schema(
       min: 2,
       max: 20,
     },
+    role: {
+      type: String,
+      enum: ["business", "individual"],
+      default: "business",
+      required: true,
+    },
     balance: {
       type: Number,
       default: () => (isSandboxMode() ? 1000 : 0),

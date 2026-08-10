@@ -62,11 +62,18 @@ const createAuthToken = (userId, { rememberMe = false } = {}) =>
 
 export const signup = async (req, res) => {
   try {
-    let { name, phone, password } = req.body;
+    let { name, phone, password, role } = req.body;
     name = name?.trim();
     phone = phone?.trim().toLowerCase();
-    if (!(name && phone && password)) {
+    role = role?.trim().toLowerCase();
+    if (isSandbox) {
+      role = "business";
+    }
+    if (!(name && phone && password && role)) {
       return res.status(400).json({ code: "AUTH_REQUIRED_FIELDS_MISSING" });
+    }
+    if (!["business", "individual"].includes(role)) {
+      return res.status(400).json({ code: "AUTH_INVALID_ROLE" });
     }
     const isPhoneUsed = (await User.findOne({ phone })) ? true : false;
     if (isPhoneUsed) {
@@ -78,8 +85,9 @@ export const signup = async (req, res) => {
     const newUser = await User.create({
       phone,
       name,
+      role,
       password: hashedPassword,
-      isActive: false,
+      isActive: isSandbox || role === "individual",
     });
 
     const verificationCode = generateCode(6);
@@ -92,7 +100,8 @@ export const signup = async (req, res) => {
     );
     // sends the verification code to the user's phone number
     if (!isSandbox) {
-      await sendCode(phone, verificationCode);
+      console.log("Verification Code:", verificationCode);
+      // await sendCode(phone, verificationCode);
       newUser.verificationStatus.token = verificationToken;
       newUser.verificationStatus.remainingAttempts = MAX_CODE_ATTEMPTS;
       newUser.verificationStatus.codesSentCount = 1;
@@ -114,7 +123,11 @@ export const signup = async (req, res) => {
 };
 
 export const verifyAccessToken = async (req, res) => {
-  return res.status(200).json({ valid: true, role: "user", id: req.user?.id });
+  return res.status(200).json({
+    valid: true,
+    role: req.user?.role || "business",
+    id: req.user?.id,
+  });
 };
 export const checkPhoneForRegister = async (req, res) => {
   try {
@@ -226,6 +239,7 @@ export const login = async (req, res) => {
         phone: user.phone,
         profile: user.profile,
         name: user.name,
+        role: user.role || "business",
         balance: user.balance,
         isActive: user.isActive,
         canBuy: user.canBuy,

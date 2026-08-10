@@ -47,6 +47,14 @@ export const getPaginated = async (req, res) => {
         },
       },
     ]);
+    if (req.user?.role === "individual") {
+      return res.status(200).json(
+        cardTypes.map((cardType) => ({
+          ...cardType,
+          buyPrice: Number(cardType.sellPrice) || 0,
+        })),
+      );
+    }
     return res.status(200).json(cardTypes);
   } catch (err) {
     return handleError(err, res);
@@ -294,16 +302,16 @@ export const getOne = async (req, res) => {
       return res.status(404).json({ code: "CARD_TYPE_NOT_FOUND" });
     }
 
+    const isIndividualUser = req.user?.role === "individual";
+
     // Calculate effective buyPrice for each tier (for API response - end user sees this)
     let result = cardTypes[0];
     if (Array.isArray(result.tiers)) {
       // End users see calculated effective price only (hide buyPriceUsd)
       result.tiers = result.tiers.map((tier) => {
-        const effectiveBuyPrice = getEffectiveBuyPrice(
-          tier.buyPrice,
-          tier.buyPriceUsd,
-          dollarRate,
-        );
+        const effectiveBuyPrice = isIndividualUser
+          ? Number(tier.sellPrice) || 0
+          : getEffectiveBuyPrice(tier.buyPrice, tier.buyPriceUsd, dollarRate);
         // Return tier with calculated buyPrice, hide internal buyPriceUsd
         const {
           buyPriceUsd,

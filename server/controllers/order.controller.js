@@ -12,7 +12,10 @@ import User from "../models/user.model.js";
 import { placeAndResolveBambooOrder } from "../services/bambooCard.js";
 
 import { handleError } from "../utils/errorHandler.js";
-import { getEffectiveBuyPrice } from "../utils/priceCalculator.js";
+import {
+  getEffectiveBuyPrice,
+  getTierPriceForUser,
+} from "../utils/priceCalculator.js";
 import parsePagination from "../utils/parsePagination.js";
 import generateRandomSerialNumber from "../utils/generateRandomSerialNumber.js";
 import { isSandboxMode } from "../utils/sandbox.js";
@@ -434,22 +437,22 @@ export const checkoutCart = async (req, res) => {
         }
       }
 
-      const customPriceRecord = await CustomPricing.findOne({
-        userId: user._id,
-        tierId,
-      });
+      const customPriceRecord =
+        user.role === "individual"
+          ? null
+          : await CustomPricing.findOne({
+              userId: user._id,
+              tierId,
+            });
 
-      // Calculate effective buyPrice: custom price > calculated USD price > regular buyPrice
-      let buyPrice;
-      if (customPriceRecord && customPriceRecord.buyPrice !== undefined) {
-        buyPrice = Number(customPriceRecord.buyPrice);
-      } else {
-        buyPrice = getEffectiveBuyPrice(
-          tier.buyPrice,
-          tier.buyPriceUsd,
-          dollarRate,
-        );
-      }
+      const buyPrice = getTierPriceForUser({
+        userRole: user.role,
+        buyPrice: tier.buyPrice,
+        buyPriceUsd: tier.buyPriceUsd,
+        sellPrice: tier.sellPrice,
+        customBuyPrice: customPriceRecord?.buyPrice,
+        dollarRate,
+      });
 
       if (Number.isNaN(buyPrice) || buyPrice <= 0) {
         return res.status(400).json({ code: "CARD_TIER_PRICE_INVALID" });

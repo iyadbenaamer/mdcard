@@ -27,6 +27,29 @@ export const getEffectiveBuyPrice = (buyPrice, buyPriceUsd, dollarRate) => {
   return Number(buyPrice) || 0;
 };
 
+export const getTierPriceForUser = ({
+  userRole,
+  buyPrice,
+  buyPriceUsd,
+  sellPrice,
+  customBuyPrice,
+  dollarRate,
+}) => {
+  if (userRole === "individual") {
+    return Number(sellPrice) || 0;
+  }
+
+  if (
+    customBuyPrice !== null &&
+    customBuyPrice !== undefined &&
+    !Number.isNaN(Number(customBuyPrice))
+  ) {
+    return Number(customBuyPrice);
+  }
+
+  return getEffectiveBuyPrice(buyPrice, buyPriceUsd, dollarRate);
+};
+
 /**
  * Format price for display (end user should not see the calculation details)
  * @param {number} price - Price to format
