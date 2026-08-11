@@ -8,46 +8,37 @@ import { sendCode } from "../services/sendCode.js";
 import { handleError } from "../utils/errorHandler.js";
 import Setting from "../models/setting.model.js";
 import { isSandboxMode } from "../utils/sandbox.js";
+import {
+  MAX_DAILY_RESENDS,
+  evaluateResend,
+  registerCodeSent,
+  resetCodeState,
+} from "../utils/otpPolicy.js";
 
-const MAX_CODE_ATTEMPTS = 20;
-const RESEND_FIRST_TWO_DELAY_MS = 60 * 1000;
-const RESEND_AFTER_DELAY_MS = 5 * 60 * 1000;
-const RESEND_AFTER_FIVE_DELAY_MS = 2 * 60 * 60 * 1000;
 const CODE_EXPIRATION = process.env.CODE_EXPIRATION || "1h";
 const ACCESS_TOKEN_EXPIRATION = process.env.ACCESS_TOKEN_EXPIRATION || "14d";
 const REMEMBER_ME_ACCESS_EXPIRATION =
   process.env.REMEMBER_ME_ACCESS_EXPIRATION || "90d";
 const isSandbox = isSandboxMode();
 
-const getNextResendAfter = (codesSentCount = 0) => {
-  const nextCount = codesSentCount + 1;
-  const delay =
-    nextCount <= 2
-      ? RESEND_FIRST_TWO_DELAY_MS
-      : nextCount >= 5
-        ? RESEND_AFTER_FIVE_DELAY_MS
-        : RESEND_AFTER_DELAY_MS;
-  return new Date(Date.now() + delay);
-};
-
-const resetCodeState = (status) => {
-  status.remainingAttempts = MAX_CODE_ATTEMPTS;
-  status.resendAfter = null;
-  status.codesSentCount = 0;
-};
-
-const checkResendAfter = (status) => {
-  if (!status?.resendAfter) {
-    return { allowed: true };
-  }
-  const resendAfterTime = new Date(status.resendAfter).getTime();
-  if (Number.isNaN(resendAfterTime) || resendAfterTime <= Date.now()) {
-    return { allowed: true };
-  }
-  return { allowed: false, resendAfter: status.resendAfter };
-};
-
 const checkCanSendCode = (user) => user?.canSendCode !== false;
+
+// Runs the shared resend policy against a status subdocument (verificationStatus
+// or resetPassword) and, if allowed, marks a code as sent on it. Returns the
+// decision so callers can short-circuit with the right 429 code + resendAfter.
+const trySendCode = (status) => {
+  const decision = evaluateResend(status);
+  if (!decision.allowed) {
+    return decision;
+  }
+  registerCodeSent(status, decision);
+  return decision;
+};
+
+const resendRejectionResponse = (decision, notAllowedCode, dailyLimitCode) => ({
+  code: decision.reason === "DAILY_LIMIT" ? dailyLimitCode : notAllowedCode,
+  resendAfter: decision.resendAfter,
+});
 
 const createAccessToken = (userId, expiresIn = ACCESS_TOKEN_EXPIRATION) =>
   jwt.sign({ id: userId }, process.env.JWT_SECRET, {
@@ -99,16 +90,15 @@ export const signup = async (req, res) => {
       },
     );
     // sends the verification code to the user's phone number
+    let sendDecision = null;
     if (!isSandbox) {
       console.log("Verification Code:", verificationCode);
       // await sendCode(phone, verificationCode);
+      sendDecision = trySendCode(newUser.verificationStatus);
       newUser.verificationStatus.token = verificationToken;
-      newUser.verificationStatus.remainingAttempts = MAX_CODE_ATTEMPTS;
-      newUser.verificationStatus.codesSentCount = 1;
-      newUser.verificationStatus.resendAfter = getNextResendAfter(0);
     } else {
       /*
-      if it's sandbox mode, the phone verification will be bypassed and 
+      if it's sandbox mode, the phone verification will be bypassed and
       the code will be sent in the response for testing purposes
       */
       newUser.verificationStatus.isVerified = true;
@@ -116,7 +106,12 @@ export const signup = async (req, res) => {
     }
     await newUser.save();
 
-    return res.status(201).json({ code: "AUTH_USER_CREATED" });
+    const responsePayload = { code: "AUTH_USER_CREATED" };
+    if (sendDecision?.allowed) {
+      responsePayload.resendAfter = newUser.verificationStatus.resendAfter;
+      responsePayload.maxDailyResends = MAX_DAILY_RESENDS;
+    }
+    return res.status(201).json(responsePayload);
   } catch (err) {
     return handleError(err, res);
   }
@@ -186,12 +181,17 @@ export const login = async (req, res) => {
       if (!checkCanSendCode(user)) {
         return res.status(403).json({ code: "AUTH_CODE_SENDING_DISABLED" });
       }
-      const resendCheck = checkResendAfter(user.verificationStatus);
-      if (!resendCheck.allowed || !user.canSendCode) {
-        return res.status(429).json({
-          code: "AUTH_VERIFICATION_RESEND_NOT_ALLOWED",
-          resendAfter: user.verificationStatus.resendAfter,
-        });
+      const sendDecision = trySendCode(user.verificationStatus);
+      if (!sendDecision.allowed) {
+        return res
+          .status(429)
+          .json(
+            resendRejectionResponse(
+              sendDecision,
+              "AUTH_VERIFICATION_RESEND_NOT_ALLOWED",
+              "AUTH_VERIFICATION_DAILY_LIMIT_REACHED",
+            ),
+          );
       }
       const verificationCode = generateCode(6);
       const verificationToken = jwt.sign(
@@ -207,16 +207,12 @@ export const login = async (req, res) => {
       }
       console.log(verificationCode);
       user.verificationStatus.token = verificationToken;
-      user.verificationStatus.remainingAttempts = MAX_CODE_ATTEMPTS;
-      user.verificationStatus.codesSentCount =
-        (user.verificationStatus.codesSentCount || 0) + 1;
-      user.verificationStatus.resendAfter = getNextResendAfter(
-        user.verificationStatus.codesSentCount - 1,
-      );
       await user.save();
       const responsePayload = {
         isVerified,
         code: "AUTH_VERIFICATION_REQUIRED",
+        resendAfter: user.verificationStatus.resendAfter,
+        maxDailyResends: MAX_DAILY_RESENDS,
       };
       if (isSandbox) {
         responsePayload.verificationCode = verificationCode;
@@ -273,9 +269,10 @@ export const verifyAccount = async (req, res) => {
       });
     }
     if (user.verificationStatus.remainingAttempts <= 0) {
-      return res
-        .status(429)
-        .json({ code: "AUTH_VERIFICATION_ATTEMPTS_EXCEEDED" });
+      return res.status(429).json({
+        code: "AUTH_VERIFICATION_ATTEMPTS_EXCEEDED",
+        resendAfter: user.verificationStatus.resendAfter,
+      });
     }
     if (!user.verificationStatus.token) {
       return res.status(400).json({ code: "AUTH_VERIFICATION_TOKEN_MISSING" });
@@ -336,7 +333,9 @@ export const resetPassword = async (req, res) => {
       user.password = hashedPassword;
       user.resetPassword.token = null;
       user.verificationStatus.isVerified = true;
+      user.verificationStatus.token = null;
       resetCodeState(user.resetPassword);
+      resetCodeState(user.verificationStatus);
       await user.save();
       const accessToken = createAuthToken(user.id);
       return res.status(200).json({
@@ -364,35 +363,38 @@ export const sendVerificationCode = async (req, res) => {
     if (!checkCanSendCode(user)) {
       return res.status(403).json({ code: "AUTH_CODE_SENDING_DISABLED" });
     }
-    const verificationCode = generateCode(6);
-    const token = jwt.sign(
-      { id: user.id, verificationCode },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: CODE_EXPIRATION,
-      },
-    );
     if (type === "reset-password") {
-      const resendCheck = checkResendAfter(user.resetPassword);
-      if (!resendCheck.allowed || !user.canSendCode) {
-        return res.status(429).json({
-          code: "AUTH_RESET_RESEND_NOT_ALLOWED",
-          resendAfter: user.resetPassword.resendAfter,
-        });
+      const sendDecision = trySendCode(user.resetPassword);
+      if (!sendDecision.allowed) {
+        return res
+          .status(429)
+          .json(
+            resendRejectionResponse(
+              sendDecision,
+              "AUTH_RESET_RESEND_NOT_ALLOWED",
+              "AUTH_RESET_DAILY_LIMIT_REACHED",
+            ),
+          );
       }
 
+      const verificationCode = generateCode(6);
+      const token = jwt.sign(
+        { id: user.id, verificationCode },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: CODE_EXPIRATION,
+        },
+      );
       if (!isSandbox) {
         await sendCode(phone, verificationCode);
       }
       user.resetPassword.token = token;
-      user.resetPassword.remainingAttempts = MAX_CODE_ATTEMPTS;
-      user.resetPassword.codesSentCount =
-        (user.resetPassword.codesSentCount || 0) + 1;
-      user.resetPassword.resendAfter = getNextResendAfter(
-        user.resetPassword.codesSentCount - 1,
-      );
       await user.save();
-      const responsePayload = { code: "AUTH_RESET_CODE_SENT" };
+      const responsePayload = {
+        code: "AUTH_RESET_CODE_SENT",
+        resendAfter: user.resetPassword.resendAfter,
+        maxDailyResends: MAX_DAILY_RESENDS,
+      };
       if (isSandbox) {
         responsePayload.verificationCode = verificationCode;
       }
@@ -404,26 +406,37 @@ export const sendVerificationCode = async (req, res) => {
           alreadyVerified: true,
         });
       }
-      const resendCheck = checkResendAfter(user.verificationStatus);
-      if (!resendCheck.allowed || !user.canSendCode) {
-        return res.status(429).json({
-          code: "AUTH_VERIFICATION_RESEND_NOT_ALLOWED",
-          resendAfter: user.verificationStatus.resendAfter,
-        });
+      const sendDecision = trySendCode(user.verificationStatus);
+      if (!sendDecision.allowed) {
+        return res
+          .status(429)
+          .json(
+            resendRejectionResponse(
+              sendDecision,
+              "AUTH_VERIFICATION_RESEND_NOT_ALLOWED",
+              "AUTH_VERIFICATION_DAILY_LIMIT_REACHED",
+            ),
+          );
       }
 
+      const verificationCode = generateCode(6);
+      const token = jwt.sign(
+        { id: user.id, verificationCode },
+        process.env.JWT_SECRET,
+        {
+          expiresIn: CODE_EXPIRATION,
+        },
+      );
       if (!isSandbox) {
         await sendCode(phone, verificationCode);
       }
       user.verificationStatus.token = token;
-      user.verificationStatus.remainingAttempts = MAX_CODE_ATTEMPTS;
-      user.verificationStatus.codesSentCount =
-        (user.verificationStatus.codesSentCount || 0) + 1;
-      user.verificationStatus.resendAfter = getNextResendAfter(
-        user.verificationStatus.codesSentCount - 1,
-      );
       await user.save();
-      const responsePayload = { code: "AUTH_VERIFICATION_CODE_SENT" };
+      const responsePayload = {
+        code: "AUTH_VERIFICATION_CODE_SENT",
+        resendAfter: user.verificationStatus.resendAfter,
+        maxDailyResends: MAX_DAILY_RESENDS,
+      };
       if (isSandbox) {
         responsePayload.verificationCode = verificationCode;
       }
@@ -445,7 +458,10 @@ export const verifyResetPasswordCode = async (req, res) => {
       return res.status(400).json({ code: "AUTH_USER_NOT_FOUND" });
     }
     if (user.resetPassword.remainingAttempts <= 0) {
-      return res.status(429).json({ code: "AUTH_RESET_ATTEMPTS_EXCEEDED" });
+      return res.status(429).json({
+        code: "AUTH_RESET_ATTEMPTS_EXCEEDED",
+        resendAfter: user.resetPassword.resendAfter,
+      });
     }
     if (!user.resetPassword.token) {
       return res.status(400).json({ code: "AUTH_RESET_TOKEN_MISSING" });

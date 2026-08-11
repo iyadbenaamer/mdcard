@@ -31,20 +31,26 @@ const userSchema = new Schema(
     verificationStatus: {
       isVerified: { type: Boolean, default: false },
       token: String,
-      remainingAttempts: { type: Number, default: 20, max: 20, min: 0 },
+      remainingAttempts: { type: Number, default: 0, min: 0 },
       resendAfter: Date,
       codesSentCount: { type: Number, default: 0 },
+      // start of the rolling window used to cap how many codes can be sent per day
+      windowStart: Date,
     },
     // if the user is blocked by admin, or deactivated their account, they won't be able to login
     isActive: { type: Boolean, default: true },
     // if the user is blocked by admin, they won't be able to buy cards, but they can still login and use the app
     canBuy: { type: Boolean, default: true },
     canSendCode: { type: Boolean, default: true },
+    // Expo push tokens for devices the user is logged into; used to deliver
+    // notifications (e.g. dollar rate changes) via the Expo push service.
+    pushTokens: { type: [String], default: [] },
     resetPassword: {
       token: String,
-      remainingAttempts: { type: Number, default: 20, max: 20, min: 0 },
+      remainingAttempts: { type: Number, default: 0, min: 0 },
       resendAfter: Date,
       codesSentCount: { type: Number, default: 0 },
+      windowStart: Date,
     },
   },
   { timestamps: true },
