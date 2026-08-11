@@ -22,6 +22,8 @@ const authErrorResponses = {
         examples: {
           loginRequired: { value: { code: "AUTH_LOGIN_REQUIRED" } },
           tokenInvalid: { value: { code: "AUTH_TOKEN_INVALID" } },
+          userTokenInvalid: { value: { code: "AUTH_USER_TOKEN_INVALID" } },
+          userInactive: { value: { code: "AUTH_USER_INACTIVE" } },
         },
       },
     },
@@ -32,20 +34,27 @@ export const openApiSpec = {
   openapi: "3.0.0",
   info: {
     title: "MD Card API",
-    version: "1.0.0",
-    description:
-      "User-facing endpoints. Use Bearer token in the Authorization header. Some endpoints behave differently in sandbox mode; see endpoint notes.",
+    version: "1.1.0",
+    description: [
+      "An API for business partners integrating with MD Card: browse the card catalog and place orders. Pass the token from `POST /login` as a `Bearer` token in the `Authorization` header on every request after that. There is no server-side cart — build one on your side as a list of `{ tierId, quantity }` and only call the API when you're ready to check out.",
+      "",
+      "All error responses share one shape: `{ \"code\": \"SOME_MACHINE_CODE\" }` (see `ErrorResponse`). Branch on `code`, not on message text (there isn't one). A full walkthrough with worked examples for every step — logging in, browsing, checking out — is in the accompanying API guide.",
+      isSandbox
+        ? "\n\n**This spec was generated from a server currently running in test/sandbox mode.** Endpoints marked \"Sandbox:\" below are behaving as described, and a test-account signup endpoint is available (see Auth) that doesn't exist in production."
+        : "",
+    ].join("\n"),
   },
 
   tags: [
-    { name: "Auth", description: "Authentication and verification" },
+    { name: "Auth", description: "Login and access tokens (account creation is sandbox-only)" },
     { name: "Users", description: "User profile" },
-    { name: "Card Categories", description: "Card categories" },
-    { name: "Card Types", description: "Card types" },
-    { name: "Card Tiers", description: "Card tiers" },
-    { name: "Orders", description: "Orders and checkout" },
-    { name: "Search", description: "Search endpoints" },
-    { name: "Transactions", description: "User transactions" },
+    { name: "Card Categories", description: "Top-level card catalog categories" },
+    { name: "Card Types", description: "Card types (brands/products) within a category" },
+    { name: "Card Tiers", description: "Purchasable denominations/tiers of a card type" },
+    { name: "Orders", description: "Cart checkout and order history" },
+    { name: "Search", description: "Catalog search" },
+    { name: "Transactions", description: "Balance transaction history (deposits, purchases, refunds)" },
+    { name: "Favorites", description: "A user's favorited card types" },
   ],
   components: {
     securitySchemes: {
@@ -63,11 +72,13 @@ export const openApiSpec = {
         },
         required: ["code"],
       },
-      AuthCodeResponse: {
+      OtpRejectedResponse: {
         type: "object",
+        description:
+          "429 response when a resend is requested before its cooldown/daily cap has elapsed.",
         properties: {
           code: { type: "string" },
-          verificationCode: { type: "string" },
+          resendAfter: { type: "string", format: "date-time" },
         },
         required: ["code"],
       },
@@ -76,7 +87,12 @@ export const openApiSpec = {
         properties: {
           code: { type: "string" },
           isVerified: { type: "boolean" },
-          verificationCode: { type: "string" },
+          resendAfter: { type: "string", format: "date-time" },
+          maxDailyResends: { type: "number" },
+          verificationCode: {
+            type: "string",
+            description: "Sandbox only.",
+          },
         },
         required: ["code", "isVerified"],
       },
@@ -84,6 +100,12 @@ export const openApiSpec = {
         type: "object",
         properties: {
           code: { type: "string" },
+          resendAfter: {
+            type: "string",
+            format: "date-time",
+            description: "Present outside sandbox mode, once the initial verification code has been sent.",
+          },
+          maxDailyResends: { type: "number" },
         },
         required: ["code"],
       },
@@ -91,25 +113,19 @@ export const openApiSpec = {
         type: "object",
         properties: {
           valid: { type: "boolean" },
-          role: { type: "string", enum: ["business", "individual"] },
+          role: { type: "string", enum: ["business"] },
           id: { type: "string" },
         },
         required: ["valid", "role", "id"],
       },
-      ResetTokenResponse: {
+      LoginProfile: {
         type: "object",
-        properties: {
-          token: { type: "string" },
-        },
-        required: ["token"],
-      },
-      Profile: {
-        type: "object",
+        description: "The shape of `profile` returned by POST /login.",
         properties: {
           id: { type: "string" },
           phone: { type: "string" },
           name: { type: "string" },
-          role: { type: "string", enum: ["business", "individual"] },
+          role: { type: "string", enum: ["business"] },
           balance: { type: "number" },
           isActive: { type: "boolean" },
           canBuy: { type: "boolean" },
@@ -118,10 +134,37 @@ export const openApiSpec = {
           updatedAt: { type: "string", format: "date-time" },
         },
       },
+      UserProfile: {
+        type: "object",
+        description:
+          "The shape of `profile` returned by GET /user. Note this is NOT the same shape as LoginProfile: it has no `id` field, but it does include `verificationStatus`.",
+        properties: {
+          phone: { type: "string" },
+          name: { type: "string" },
+          role: { type: "string", enum: ["business"] },
+          balance: { type: "number" },
+          isActive: { type: "boolean" },
+          canBuy: { type: "boolean" },
+          canSendCode: { type: "boolean" },
+          verificationStatus: { $ref: "#/components/schemas/VerificationStatus" },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
+        },
+      },
+      VerificationStatus: {
+        type: "object",
+        properties: {
+          isVerified: { type: "boolean" },
+          remainingAttempts: { type: "number" },
+          resendAfter: { type: "string", format: "date-time", nullable: true },
+          codesSentCount: { type: "number" },
+          windowStart: { type: "string", format: "date-time", nullable: true },
+        },
+      },
       LoginResponse: {
         type: "object",
         properties: {
-          profile: { $ref: "#/components/schemas/Profile" },
+          profile: { $ref: "#/components/schemas/LoginProfile" },
           support: { type: "string" },
           isVerified: { type: "boolean" },
           accessToken: { type: "string" },
@@ -131,7 +174,7 @@ export const openApiSpec = {
       UserProfileResponse: {
         type: "object",
         properties: {
-          profile: { $ref: "#/components/schemas/Profile" },
+          profile: { $ref: "#/components/schemas/UserProfile" },
           support: { type: "string" },
         },
         required: ["profile"],
@@ -142,6 +185,7 @@ export const openApiSpec = {
           id: { type: "string" },
           name: { type: "string" },
           phone: { type: "string" },
+          role: { type: "string", enum: ["business"] },
           balance: { type: "number" },
           isActive: { type: "boolean" },
           canBuy: { type: "boolean" },
@@ -154,16 +198,46 @@ export const openApiSpec = {
           _id: { type: "string" },
           name: { type: "string" },
           order: { type: "number" },
-          count: { type: "number" },
+          count: {
+            type: "number",
+            description: "Number of card types in this category.",
+          },
         },
       },
       CardTier: {
         type: "object",
+        description:
+          'The tier shape returned nested under a card type (GET /card-types/get-one), already priced for your account. Example: `{ "_id": "64f...", "title": "$25", "sellPrice": 25, "buyPrice": 22.5, "isAvailable": true }`. Use `buyPrice` as-is — it is the final per-unit price to charge, no further calculation needed.',
         properties: {
           _id: { type: "string" },
           typeId: { type: "string" },
           title: { type: "string" },
           order: { type: "number" },
+          sellPrice: { type: "number" },
+          buyPrice: {
+            type: "number",
+            description: "The price this account pays per unit.",
+          },
+          isAvailable: {
+            type: "boolean",
+            description: "false when this tier is temporarily out of stock; true otherwise.",
+          },
+        },
+      },
+      CardTierListItem: {
+        type: "object",
+        description:
+          "A simpler tier listing (GET /card-tiers). Prefer /card-types/get-one or /card-types/by-category for browsing and pricing — those return the CardTier shape above, already priced and availability-checked for your account.",
+        properties: {
+          _id: { type: "string" },
+          typeId: { type: "string" },
+          order: { type: "number" },
+          title: { type: "string" },
+          buyPrice: { type: "number", nullable: true },
+          sellPrice: { type: "number" },
+          isActive: { type: "boolean" },
+          createdAt: { type: "string", format: "date-time" },
+          updatedAt: { type: "string", format: "date-time" },
         },
       },
       CardTierAvailabilityItem: {
@@ -171,7 +245,11 @@ export const openApiSpec = {
         properties: {
           tierId: { type: "string" },
           requested: { type: "number" },
-          available: { type: "number" },
+          available: {
+            type: "number",
+            description:
+              "How many of the requested quantity can actually be fulfilled right now (never more than `requested`).",
+          },
         },
         required: ["tierId", "requested", "available"],
       },
@@ -183,7 +261,12 @@ export const openApiSpec = {
           name: { type: "string" },
           image: { type: "string", nullable: true },
           printImage: { type: "string", nullable: true },
-          redeemFormat: { type: "string", nullable: true },
+          redeemFormat: {
+            type: "string",
+            nullable: true,
+            description:
+              "Printable template for this type's cards; supports {code}, {serial}, {title}, {tier} placeholders.",
+          },
           showExpiryDateDay: { type: "boolean" },
           notes: { type: "string", nullable: true },
           order: { type: "number" },
@@ -197,27 +280,31 @@ export const openApiSpec = {
             properties: {
               tiers: {
                 type: "array",
-                items: {
-                  allOf: [
-                    { $ref: "#/components/schemas/CardTier" },
-                    {
-                      type: "object",
-                      properties: {
-                        isAvailable: { type: "boolean" },
-                      },
-                    },
-                  ],
-                },
+                items: { $ref: "#/components/schemas/CardTier" },
               },
             },
           },
         ],
       },
-      Card: {
+      Favorite: {
         type: "object",
         properties: {
           _id: { type: "string" },
-          tierId: { type: "string" },
+          userId: { type: "string" },
+          cardTypeId: { type: "string" },
+          cardTypeName: { type: "string" },
+          cardTypeImage: { type: "string", nullable: true },
+          cardTypeIsActive: { type: "boolean" },
+          categoryId: { type: "string" },
+          categoryName: { type: "string" },
+          createdAt: { type: "string", format: "date-time" },
+        },
+      },
+      Card: {
+        type: "object",
+        description: "A purchased card, ready to display or print.",
+        properties: {
+          _id: { type: "string" },
           serialNumber: { type: "string" },
           code: { type: "string" },
           pin: { type: "string", nullable: true },
@@ -230,27 +317,35 @@ export const openApiSpec = {
         properties: {
           tierId: {
             type: "object",
+            nullable: true,
             properties: {
               _id: { type: "string" },
-              title: { type: "string" },
               typeId: {
                 type: "object",
+                nullable: true,
                 properties: {
                   _id: { type: "string" },
                   name: { type: "string" },
                   redeemFormat: { type: "string", nullable: true },
                   image: { type: "string", nullable: true },
                   printImage: { type: "string", nullable: true },
-                  showExpiryDateDay: { type: "boolean" },
+                  showExpiryDateDay: { type: "boolean", nullable: true },
                 },
               },
             },
           },
-          title: { type: "string" },
-          price: { type: "number" },
+          title: {
+            type: "string",
+            description: "Snapshot of the tier's title at purchase time.",
+          },
+          price: {
+            type: "number",
+            description: "Per-unit price actually charged, frozen at checkout time.",
+          },
           quantity: { type: "number" },
           cards: {
             type: "array",
+            description: "Only populated on GET /orders/{id}, not on the list endpoint.",
             items: { $ref: "#/components/schemas/Card" },
           },
         },
@@ -276,13 +371,24 @@ export const openApiSpec = {
               type: "object",
               properties: {
                 tierId: { type: "string" },
-                quantity: { type: "number", minimum: 1 },
+                quantity: {
+                  type: "number",
+                  minimum: 1,
+                  description: "Missing or invalid values are treated as 1.",
+                },
               },
               required: ["tierId"],
             },
           },
+          checkoutKey: {
+            type: "string",
+            description:
+              "Client-generated idempotency key (e.g. a UUID) unique per checkout attempt. Retrying the same checkout with the same key replays the original result instead of charging the user again.",
+            minLength: 8,
+            maxLength: 100,
+          },
         },
-        required: ["items"],
+        required: ["items", "checkoutKey"],
       },
       CheckoutResponse: {
         type: "object",
@@ -292,17 +398,47 @@ export const openApiSpec = {
             items: { $ref: "#/components/schemas/Card" },
           },
           order: { $ref: "#/components/schemas/Order" },
-          balance: { type: "number" },
-          partialFailure: { type: "boolean" },
+          balance: { type: "number", description: "User's balance after the purchase." },
+          partialFailure: {
+            type: "boolean",
+            description:
+              "Always false today — any item that can't be fully fulfilled cancels the whole checkout (see the 409 response) rather than completing partially.",
+          },
           failedItems: { type: "array", items: { type: "object" } },
         },
         required: ["cards", "order", "balance"],
+      },
+      CheckoutCancelResponse: {
+        type: "object",
+        description:
+          "409 response: none of the user's balance or cart was touched. `details` explains, per affected cart line, why it couldn't be fulfilled.",
+        properties: {
+          code: { type: "string", example: "CART_AVAILABILITY_CHANGED" },
+          details: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                tierId: { type: "string" },
+                requested: { type: "number" },
+                available: { type: "number" },
+                code: {
+                  type: "string",
+                  description:
+                    "A short code explaining why this line failed, e.g. OUT_OF_STOCK or INCOMPLETE_ORDER.",
+                },
+                message: { type: "string", nullable: true },
+              },
+            },
+          },
+        },
+        required: ["code"],
       },
       Pagination: {
         type: "object",
         properties: {
           page: { type: "number" },
-          limit: { type: "number" },
+          limit: { type: "number", description: "Capped at 100." },
           total: { type: "number" },
           totalPages: { type: "number" },
           hasMore: { type: "boolean" },
@@ -318,6 +454,40 @@ export const openApiSpec = {
           pagination: { $ref: "#/components/schemas/Pagination" },
         },
       },
+      TransactionOrderSummary: {
+        type: "object",
+        description:
+          "A reduced view of the purchase's order — only present when type is \"purchase\". Note the nested card type only carries _id/name here, unlike the full CardType shape returned from the Orders endpoints.",
+        properties: {
+          _id: { type: "string" },
+          items: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                tierId: {
+                  type: "object",
+                  nullable: true,
+                  properties: {
+                    _id: { type: "string" },
+                    typeId: {
+                      type: "object",
+                      nullable: true,
+                      properties: {
+                        _id: { type: "string" },
+                        name: { type: "string" },
+                      },
+                    },
+                  },
+                },
+                title: { type: "string" },
+                price: { type: "number" },
+                quantity: { type: "number" },
+              },
+            },
+          },
+        },
+      },
       Transaction: {
         type: "object",
         properties: {
@@ -326,7 +496,10 @@ export const openApiSpec = {
           amount: { type: "number" },
           balanceBefore: { type: "number" },
           balanceAfter: { type: "number" },
-          orderId: { type: "object" },
+          orderId: {
+            allOf: [{ $ref: "#/components/schemas/TransactionOrderSummary" }],
+            nullable: true,
+          },
           createdAt: { type: "string", format: "date-time" },
         },
       },
@@ -352,79 +525,119 @@ export const openApiSpec = {
     },
   },
   paths: {
+    // Self-service signup is a mobile-app/sandbox-only flow — production
+    // business accounts using this API are created and activated by MD Card
+    // directly, so this route is only listed here in sandbox mode.
     ...(isSandbox
       ? {
-          "/signup": {
-            post: {
-              tags: ["Auth"],
-              summary: "Create account",
-              description:
-                "Sandbox: no verification code will be sent, no verification process will be carried out, and accounts are always created as active business accounts.",
-              requestBody: {
-                required: true,
-                content: {
-                  "application/json": {
-                    schema: {
-                      type: "object",
-                      properties: {
-                        name: { type: "string", example: "John Doe" },
-                        phone: { type: "string", example: "0912345678" },
-                        password: { type: "string", example: "string" },
-                        role: {
-                          type: "string",
-                          enum: ["business", "individual"],
-                          example: "individual",
-                        },
-                      },
-                      required: ["name", "phone", "password", "role"],
-                    },
+    "/signup": {
+      post: {
+        tags: ["Auth"],
+        summary: "Create account",
+        description:
+          "Sandbox-only: creates a test account that's immediately active and ready to log in with.\n\nExample request:\n```json\n{ \"name\": \"John Doe\", \"phone\": \"0912345678\", \"password\": \"Str0ng!Pass\", \"role\": \"business\" }\n```\nOutside sandbox mode this endpoint does not exist — production business accounts are created and activated by MD Card directly.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: {
+                  name: {
+                    type: "string",
+                    example: "John Doe",
+                    description: "2-50 chars; no punctuation/symbols.",
+                  },
+                  phone: {
+                    type: "string",
+                    example: "0912345678",
+                    description: "Libyan format: 09 followed by 8 digits.",
+                  },
+                  password: {
+                    type: "string",
+                    example: "string",
+                    description: "8-50 chars; must include at least one digit and one symbol.",
+                  },
+                  role: {
+                    type: "string",
+                    enum: ["business"],
+                    example: "business",
                   },
                 },
+                required: ["name", "phone", "password", "role"],
               },
-              responses: {
-                201: {
-                  description: "Account created",
-                  content: {
-                    "application/json": {
-                      schema: { $ref: "#/components/schemas/SignupResponse" },
-                    },
-                  },
-                },
-                400: {
-                  description: "Missing required fields",
-                  content: {
-                    "application/json": {
-                      schema: { $ref: "#/components/schemas/ErrorResponse" },
-                    },
-                  },
-                },
-                409: {
-                  description: "Phone already registered",
-                  content: {
-                    "application/json": {
-                      schema: { $ref: "#/components/schemas/ErrorResponse" },
-                    },
-                  },
-                },
-                default: {
-                  description: "Error",
-                  content: {
-                    "application/json": {
-                      schema: { $ref: "#/components/schemas/ErrorResponse" },
-                    },
-                  },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: "Account created",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SignupResponse" },
+                examples: {
+                  sandbox: { value: { code: "AUTH_USER_CREATED" } },
                 },
               },
             },
           },
-        }
+          400: {
+            description: "Missing/invalid fields",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  missingFields: { value: { code: "AUTH_REQUIRED_FIELDS_MISSING" } },
+                  invalidRole: { value: { code: "AUTH_INVALID_ROLE" } },
+                  invalidName: { value: { code: "CHECK_INVALID_NAME" } },
+                  invalidPhone: { value: { code: "CHECK_INVALID_PHONE" } },
+                  invalidPassword: { value: { code: "CHECK_INVALID_PASSWORD_FORMAT" } },
+                },
+              },
+            },
+          },
+          409: {
+            description: "Phone already registered",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  taken: { value: { code: "AUTH_PHONE_ALREADY_REGISTERED" } },
+                },
+              },
+            },
+          },
+          429: {
+            description: "Auth rate limit exceeded (20 req / 15 min per IP)",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  rateLimited: { value: { code: "AUTH_RATE_LIMIT_EXCEEDED" } },
+                },
+              },
+            },
+          },
+          default: {
+            description: "Error",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+        },
+      },
+    },
+      }
       : {}),
+
     "/login": {
       post: {
         tags: ["Auth"],
         summary: "Login",
         description:
-          "Sandbox: the app will bypass phone verification and no SMS is sent.",
+          "Sandbox: bypasses the phone-verification gate entirely (no SMS sent, no 401). Rate-limited to 20 requests / 15 min per IP.",
         requestBody: {
           required: true,
           content: {
@@ -437,7 +650,7 @@ export const openApiSpec = {
                   rememberMe: {
                     type: "boolean",
                     description:
-                      "Keep the user logged in for a longer period 90 days instead of the default session duration 14 days.",
+                      "Keep the user logged in for a longer period (90 days) instead of the default session duration (14 days).",
                   },
                 },
                 required: ["phone", "password"],
@@ -454,12 +667,75 @@ export const openApiSpec = {
               },
             },
           },
+          400: {
+            description: "Missing phone/password",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { invalid: { value: { code: "AUTH_INVALID_LOGIN" } } },
+              },
+            },
+          },
           401: {
-            description: "Verification required",
+            description: "Wrong password, or phone not yet verified",
             content: {
               "application/json": {
                 schema: {
                   $ref: "#/components/schemas/VerificationRequiredResponse",
+                },
+                examples: {
+                  wrongPassword: { value: { code: "AUTH_INVALID_LOGIN" } },
+                  verificationRequired: {
+                    value: {
+                      code: "AUTH_VERIFICATION_REQUIRED",
+                      isVerified: false,
+                      resendAfter: "2026-08-11T12:01:00.000Z",
+                      maxDailyResends: 6,
+                    },
+                  },
+                },
+              },
+            },
+          },
+          403: {
+            description: "This account has been disabled from receiving verification codes",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  codeSendingDisabled: { value: { code: "AUTH_CODE_SENDING_DISABLED" } },
+                },
+              },
+            },
+          },
+          404: {
+            description: "No account with this phone number",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { notFound: { value: { code: "AUTH_INVALID_LOGIN" } } },
+              },
+            },
+          },
+          429: {
+            description: "Auth rate limit, or verification-code resend not yet allowed",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OtpRejectedResponse" },
+                examples: {
+                  rateLimited: { value: { code: "AUTH_RATE_LIMIT_EXCEEDED" } },
+                  resendCooldown: {
+                    value: {
+                      code: "AUTH_VERIFICATION_RESEND_NOT_ALLOWED",
+                      resendAfter: "2026-08-11T12:01:00.000Z",
+                    },
+                  },
+                  dailyLimit: {
+                    value: {
+                      code: "AUTH_VERIFICATION_DAILY_LIMIT_REACHED",
+                      resendAfter: "2026-08-12T00:00:00.000Z",
+                    },
+                  },
                 },
               },
             },
@@ -475,12 +751,12 @@ export const openApiSpec = {
         },
       },
     },
+
     "/verify-access": {
       get: {
         tags: ["Auth"],
         summary: "Verify access token",
-        description:
-          "Check if the provided access token is valid and get user info.",
+        description: "Check if the provided access token is valid and get user info.",
         security: bearerAuth,
         responses: {
           200: {
@@ -506,7 +782,7 @@ export const openApiSpec = {
     "/user": {
       get: {
         tags: ["Users"],
-        summary: "Get user profile",
+        summary: "Get current user's profile",
         security: bearerAuth,
         responses: {
           200: {
@@ -514,6 +790,15 @@ export const openApiSpec = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/UserProfileResponse" },
+              },
+            },
+          },
+          404: {
+            description: "User no longer exists",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { notFound: { value: { code: "USER_NOT_FOUND" } } },
               },
             },
           },
@@ -530,7 +815,8 @@ export const openApiSpec = {
       },
       patch: {
         tags: ["Users"],
-        summary: "Update user password",
+        summary: "Change the current user's password",
+        description: "Only `password` is settable through this endpoint. Omit the body/field to no-op.",
         security: bearerAuth,
         requestBody: {
           required: false,
@@ -539,7 +825,10 @@ export const openApiSpec = {
               schema: {
                 type: "object",
                 properties: {
-                  password: { type: "string" },
+                  password: {
+                    type: "string",
+                    description: "8-50 chars; must include at least one digit and one symbol.",
+                  },
                 },
               },
             },
@@ -551,6 +840,26 @@ export const openApiSpec = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/UserUpdateResponse" },
+              },
+            },
+          },
+          400: {
+            description: "Password fails the format check",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  invalidPassword: { value: { code: "CHECK_INVALID_PASSWORD_FORMAT" } },
+                },
+              },
+            },
+          },
+          404: {
+            description: "User no longer exists",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { notFound: { value: { code: "USER_NOT_FOUND" } } },
               },
             },
           },
@@ -573,7 +882,7 @@ export const openApiSpec = {
         security: bearerAuth,
         responses: {
           200: {
-            description: "Card categories",
+            description: "Card categories, sorted by `order`",
             content: {
               "application/json": {
                 schema: {
@@ -595,12 +904,78 @@ export const openApiSpec = {
         },
       },
     },
+    "/card-tiers": {
+      get: {
+        tags: ["Card Tiers"],
+        summary: "List active card tiers",
+        description:
+          "A simple tier listing. Prefer GET /card-types/get-one for browsing — it returns tiers already priced and availability-checked for your account (see the Card Types section).",
+        security: bearerAuth,
+        parameters: [
+          {
+            name: "typeId",
+            in: "query",
+            schema: { type: "string" },
+            description: "Filter to tiers of a single card type. If given, the response is wrapped with the type/category name.",
+          },
+          { name: "page", in: "query", schema: { type: "number" } },
+          { name: "limit", in: "query", schema: { type: "number" } },
+        ],
+        responses: {
+          200: {
+            description: "Tiers",
+            content: {
+              "application/json": {
+                schema: {
+                  oneOf: [
+                    {
+                      type: "array",
+                      items: { $ref: "#/components/schemas/CardTierListItem" },
+                    },
+                    {
+                      type: "object",
+                      description: "Shape returned when `typeId` is given.",
+                      properties: {
+                        name: { type: "string" },
+                        categoryName: { type: "string" },
+                        tiers: {
+                          type: "array",
+                          items: { $ref: "#/components/schemas/CardTierListItem" },
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          404: {
+            description: "typeId does not match any card type",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { notFound: { value: { code: "CARD_TYPE_NOT_FOUND" } } },
+              },
+            },
+          },
+          ...authErrorResponses,
+          default: {
+            description: "Error",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+        },
+      },
+    },
     "/card-tiers/availability": {
       post: {
         tags: ["Card Tiers"],
         summary: "Check tier availability",
         description:
-          "Sandbox: availability always equals requested quantity (no local stock check).",
+          "Call this right before checkout to confirm the cart is still fulfillable — checkout itself re-validates and will 409 with CART_AVAILABILITY_CHANGED if stock moved between this call and the checkout request. Sandbox: availability always equals requested quantity (no local stock check).",
         security: bearerAuth,
         requestBody: {
           required: true,
@@ -637,6 +1012,15 @@ export const openApiSpec = {
                     $ref: "#/components/schemas/CardTierAvailabilityItem",
                   },
                 },
+              },
+            },
+          },
+          400: {
+            description: "Empty items array",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { required: { value: { code: "CART_ITEMS_REQUIRED" } } },
               },
             },
           },
@@ -689,7 +1073,7 @@ export const openApiSpec = {
       get: {
         tags: ["Card Types"],
         summary: "List card types by category",
-        description: "Returns active card types for users.",
+        description: "Returns active card types for users. This is the primary category-drilldown endpoint used by the storefront.",
         security: bearerAuth,
         parameters: [
           {
@@ -719,6 +1103,24 @@ export const openApiSpec = {
               },
             },
           },
+          400: {
+            description: "Invalid categoryId",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { invalid: { value: { code: "CARD_CATEGORY_ID_INVALID" } } },
+              },
+            },
+          },
+          404: {
+            description: "Category not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { notFound: { value: { code: "CARD_CATEGORY_NOT_FOUND" } } },
+              },
+            },
+          },
           ...authErrorResponses,
           default: {
             description: "Error",
@@ -734,9 +1136,9 @@ export const openApiSpec = {
     "/card-types/get-one": {
       get: {
         tags: ["Card Types"],
-        summary: "Get card type details",
+        summary: "Get card type details with priced, availability-checked tiers",
         description:
-          "Returns a card type with tiers. Sandbox: isAvailable is always true for tiers.",
+          "The endpoint to call when a user opens a card type's detail screen: tiers come back pre-priced for the caller's role (see CardTier) and each carries isAvailable. Sandbox: isAvailable is always true for tiers.",
         security: bearerAuth,
         parameters: [
           {
@@ -752,6 +1154,24 @@ export const openApiSpec = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/CardTypeWithTiers" },
+              },
+            },
+          },
+          400: {
+            description: "Invalid id",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { invalid: { value: { code: "CARD_TYPE_ID_INVALID" } } },
+              },
+            },
+          },
+          404: {
+            description: "Card type not found or inactive",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { notFound: { value: { code: "CARD_TYPE_NOT_FOUND" } } },
               },
             },
           },
@@ -772,7 +1192,7 @@ export const openApiSpec = {
         tags: ["Orders"],
         summary: "Checkout cart",
         description:
-          "Sandbox: does not check local stock or call Bamboo, generates 12-digit codes, and auto-topups +1000 on insufficient balance (a deposit transaction is recorded).",
+          "Buys every item in the cart in one request. Either the whole cart is fulfilled — you get back the purchased card codes, the created order, and the account's new balance — or nothing is charged and you get a 409 explaining which line(s) couldn't be fulfilled; there's no partial checkout.\n\nExample request:\n```json\n{ \"items\": [{ \"tierId\": \"64f1a2b3c4d5e6f7a8b9c0d1\", \"quantity\": 2 }], \"checkoutKey\": \"b1e2c3d4-...\" }\n```\nExample success response:\n```json\n{ \"cards\": [{ \"serialNumber\": \"...\", \"code\": \"...\" }], \"order\": { \"_id\": \"...\", \"totalAmount\": 40 }, \"balance\": 460 }\n```\n`checkoutKey` should be a fresh unique value per checkout attempt (e.g. a UUID); reusing the same value on a retry safely returns the original result instead of charging twice.\n\nSandbox: a test mode is available where card stock/provider checks are relaxed and low balances are topped up automatically, so integrations can be tested end-to-end without real inventory or funds.",
         security: bearerAuth,
         requestBody: {
           required: true,
@@ -784,7 +1204,7 @@ export const openApiSpec = {
         },
         responses: {
           201: {
-            description: "Checkout success",
+            description: "Checkout success (including idempotent replay of a prior identical checkoutKey)",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/CheckoutResponse" },
@@ -792,10 +1212,50 @@ export const openApiSpec = {
             },
           },
           400: {
-            description: "Insufficient balance or validation error",
+            description: "Validation error or insufficient balance (outside sandbox)",
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  checkoutKeyRequired: { value: { code: "CHECKOUT_KEY_REQUIRED" } },
+                  itemsRequired: { value: { code: "CART_ITEMS_REQUIRED" } },
+                  invalidTierId: { value: { code: "CARD_TIER_ID_INVALID" } },
+                  invalidPrice: { value: { code: "CARD_TIER_PRICE_INVALID" } },
+                  insufficientBalance: { value: { code: "USER_BALANCE_INSUFFICIENT" } },
+                },
+              },
+            },
+          },
+          403: {
+            description: "Account can't buy right now",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  inactive: { value: { code: "USER_INACTIVE" } },
+                  cannotBuy: { value: { code: "USER_CANNOT_BUY" } },
+                },
+              },
+            },
+          },
+          404: {
+            description: "A tier in the cart no longer exists, or the user no longer exists",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  tierNotFound: { value: { code: "CARD_TIER_NOT_FOUND", tierId: "..." } },
+                  userNotFound: { value: { code: "USER_NOT_FOUND" } },
+                },
+              },
+            },
+          },
+          409: {
+            description:
+              "One or more cart lines couldn't be fully fulfilled — the whole checkout was cancelled and rolled back",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/CheckoutCancelResponse" },
               },
             },
           },
@@ -815,6 +1275,7 @@ export const openApiSpec = {
       get: {
         tags: ["Orders"],
         summary: "List user orders",
+        description: "Newest first. Cards are omitted from list items — fetch GET /orders/{id} for the redeemable card codes.",
         security: bearerAuth,
         parameters: [
           { name: "page", in: "query", schema: { type: "number" } },
@@ -844,7 +1305,7 @@ export const openApiSpec = {
     "/orders/{id}": {
       get: {
         tags: ["Orders"],
-        summary: "Get order by id",
+        summary: "Get order by id (with redeemable card codes)",
         security: bearerAuth,
         parameters: [
           {
@@ -860,6 +1321,24 @@ export const openApiSpec = {
             content: {
               "application/json": {
                 schema: { $ref: "#/components/schemas/Order" },
+              },
+            },
+          },
+          400: {
+            description: "Malformed id",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { invalid: { value: { code: "CHECK_INVALID_CARD_TYPE_ID" } } },
+              },
+            },
+          },
+          404: {
+            description: "No such order for this user",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { notFound: { value: { code: "ORDER_NOT_FOUND" } } },
               },
             },
           },
@@ -879,6 +1358,7 @@ export const openApiSpec = {
       get: {
         tags: ["Search"],
         summary: "Search card types",
+        description: "Case-insensitive name match, whole query and each whitespace-split term OR'd together. Capped at 50 results.",
         security: bearerAuth,
         parameters: [
           {
@@ -896,6 +1376,18 @@ export const openApiSpec = {
                 schema: {
                   type: "array",
                   items: { $ref: "#/components/schemas/CardTypeSearchItem" },
+                },
+              },
+            },
+          },
+          400: {
+            description: "Missing or too-long query",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  required: { value: { code: "SEARCH_QUERY_REQUIRED" } },
+                  tooLong: { value: { code: "SEARCH_QUERY_TOO_LONG" } },
                 },
               },
             },
@@ -918,9 +1410,23 @@ export const openApiSpec = {
         summary: "List user transactions",
         security: bearerAuth,
         parameters: [
-          { name: "type", in: "query", schema: { type: "string" } },
-          { name: "sortBy", in: "query", schema: { type: "string" } },
-          { name: "sortOrder", in: "query", schema: { type: "string" } },
+          {
+            name: "type",
+            in: "query",
+            schema: { type: "string", enum: ["deposit", "purchase", "refund"] },
+          },
+          {
+            name: "sortBy",
+            in: "query",
+            schema: { type: "string", enum: ["createdAt", "type", "amount"] },
+            description: "Defaults to createdAt.",
+          },
+          {
+            name: "sortOrder",
+            in: "query",
+            schema: { type: "string", enum: ["asc", "desc"] },
+            description: "Defaults to desc.",
+          },
           { name: "page", in: "query", schema: { type: "number" } },
           { name: "limit", in: "query", schema: { type: "number" } },
         ],
@@ -931,6 +1437,174 @@ export const openApiSpec = {
               "application/json": {
                 schema: {
                   $ref: "#/components/schemas/TransactionsListResponse",
+                },
+              },
+            },
+          },
+          400: {
+            description: "Invalid `type` filter",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: { invalid: { value: { code: "TRANSACTION_TYPE_INVALID" } } },
+              },
+            },
+          },
+          ...authErrorResponses,
+          default: {
+            description: "Error",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/favorites": {
+      get: {
+        tags: ["Favorites"],
+        summary: "List the current user's favorite card types",
+        security: bearerAuth,
+        responses: {
+          200: {
+            description: "Favorites list",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/Favorite" },
+                },
+              },
+            },
+          },
+          ...authErrorResponses,
+          default: {
+            description: "Error",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+        },
+      },
+      post: {
+        tags: ["Favorites"],
+        summary: "Add a card type to the current user's favorites",
+        security: bearerAuth,
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: { cardTypeId: { type: "string" } },
+                required: ["cardTypeId"],
+              },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: "Favorite created",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Favorite" },
+              },
+            },
+          },
+          400: {
+            description: "Invalid card type id",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  invalid: {
+                    value: { code: "FAVORITE_CARD_TYPE_ID_INVALID" },
+                  },
+                },
+              },
+            },
+          },
+          404: {
+            description: "Card type not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  notFound: { value: { code: "CARD_TYPE_NOT_FOUND" } },
+                },
+              },
+            },
+          },
+          409: {
+            description: "Already favorited",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  exists: { value: { code: "FAVORITE_EXISTS" } },
+                },
+              },
+            },
+          },
+          ...authErrorResponses,
+          default: {
+            description: "Error",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+              },
+            },
+          },
+        },
+      },
+      delete: {
+        tags: ["Favorites"],
+        summary: "Remove a card type from the current user's favorites",
+        security: bearerAuth,
+        parameters: [
+          {
+            name: "cardTypeId",
+            in: "query",
+            required: true,
+            schema: { type: "string" },
+          },
+        ],
+        responses: {
+          200: {
+            description: "Favorite deleted",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  deleted: { value: { code: "FAVORITE_DELETED" } },
+                },
+              },
+            },
+          },
+          400: {
+            description: "Invalid card type id",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  invalid: {
+                    value: { code: "FAVORITE_CARD_TYPE_ID_INVALID" },
+                  },
+                },
+              },
+            },
+          },
+          404: {
+            description: "Favorite not found",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ErrorResponse" },
+                examples: {
+                  notFound: { value: { code: "FAVORITE_NOT_FOUND" } },
                 },
               },
             },
