@@ -97,7 +97,7 @@ export const content = {
       title: "تواصل معنا",
       intro:
         "نحن سعداء بتواصلكم معنا للإجابة عن استفساراتكم أو لبدء شراكة جديدة.",
-      location: "الموقع: بنغازي – ليبيا",
+      location: "العنوان: ليبيا - بنغازي - الهواري",
       email: `البريد الإلكتروني: ${CONTACT_INFO.email}`,
       whatsapp: `واتساب: ${CONTACT_INFO.whatsappNumber}`,
       phone: `الهاتف: ${CONTACT_INFO.phoneNumber}`,

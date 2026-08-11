@@ -5,13 +5,14 @@ export default function Privacy({ language = "ar" }) {
 
   const arabic = {
     title: "سياسة الخصوصية",
-    updated: "آخر تحديث: 21 يوليو 2026",
+    updated: "آخر تحديث: 10 أغسطس 2026",
     sections: [
       {
         h: "1. البيانات التي نقوم بجمعها",
         b: [
           "قد نقوم بجمع بعض البيانات الأساسية اللازمة لإنشاء الحساب وإدارته، مثل رقم الهاتف وبيانات الدخول وبعض المعلومات المرتبطة باستخدام الخدمة.",
           "قد يتم أيضًا حفظ بيانات الطلبات والمعاملات وسجل النشاط بهدف تشغيل الخدمة بشكل صحيح ومتابعة العمليات بشكل آمن.",
+          "عند إنشاء حساب جديد، قد نجمع بيانات تقنية إضافية مثل عنوان IP وإشارات المتصفح كجزء من عملية تحقق أمني لمنع الاستخدام الآلي المسيء (البوتات).",
         ],
       },
       {
@@ -34,6 +35,7 @@ export default function Privacy({ language = "ar" }) {
         b: [
           "لا يتم بيع البيانات الشخصية أو مشاركتها مع أطراف خارجية لأغراض تسويقية.",
           "قد تتم مشاركة بعض البيانات فقط عندما يكون ذلك ضروريًا لتشغيل الخدمة، أو لتنفيذ طلب، أو للالتزام بمتطلبات قانونية أو تنظيمية.",
+          "نستخدم خدمة Cloudflare Turnstile للتحقق الأمني عند إنشاء الحساب، وقد تتم مشاركة بيانات تقنية محدودة مثل عنوان IP مع Cloudflare لهذا الغرض فقط، وفقًا لسياسة الخصوصية الخاصة بها.",
         ],
       },
       {
@@ -67,13 +69,14 @@ export default function Privacy({ language = "ar" }) {
 
   const english = {
     title: "Privacy Policy",
-    updated: "Last updated: 21 July 2026",
+    updated: "Last updated: 10 August 2026",
     sections: [
       {
         h: "1. Data We Collect",
         b: [
           "We may collect basic data needed to create and manage an account, such as phone number, login details, and information related to service usage.",
           "We may also store order data, transaction data, and activity logs to keep the service running correctly and securely.",
+          "When creating a new account, we may collect additional technical data such as IP address and browser signals as part of a security verification step to prevent automated abuse (bots).",
         ],
       },
       {
@@ -96,6 +99,7 @@ export default function Privacy({ language = "ar" }) {
         b: [
           "We do not sell personal data or share it with third parties for marketing purposes.",
           "Some data may be shared only when necessary to operate the service, complete an order, or comply with legal or regulatory obligations.",
+          "We use Cloudflare Turnstile for security verification during account creation. Limited technical data such as IP address may be shared with Cloudflare solely for this purpose, in accordance with its own privacy policy.",
         ],
       },
       {
