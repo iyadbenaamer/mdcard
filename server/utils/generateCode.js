@@ -1,9 +1,7 @@
-export const generateCode = (degits) => {
-  let code = 0;
-  let base = 1;
-  for (let i = 0; i < degits; i++) {
-    code = code + 5 * base;
-    base *= 10;
-  }
-  return Math.floor((Math.random() + 0.2) * code).toString();
+import crypto from "crypto";
+
+export const generateCode = (digits) => {
+  const min = 10 ** (digits - 1);
+  const max = 10 ** digits;
+  return crypto.randomInt(min, max).toString();
 };
