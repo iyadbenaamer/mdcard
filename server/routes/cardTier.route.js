@@ -2,10 +2,6 @@ import { Router } from "express";
 
 import {
   getPaginated,
-  createOne,
-  updateOne,
-  updateOrderList,
-  deleteOne,
   checkAvailability,
 } from "../controllers/cardTier.controller.js";
 

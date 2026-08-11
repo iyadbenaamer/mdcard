@@ -1,13 +1,9 @@
 import { Router } from "express";
 
 import {
-  createOne,
   getPaginated,
   getOne,
   getByCategory,
-  updateOne,
-  updateOrderList,
-  deleteOne,
 } from "../controllers/cardType.controller.js";
 
 import { getUserInfo, verifyToken } from "../middleware/auth.middleware.js";
