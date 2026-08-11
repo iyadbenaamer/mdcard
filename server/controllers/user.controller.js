@@ -61,3 +61,35 @@ export const update = async (req, res) => {
     return handleError(err, res);
   }
 };
+
+/*PUSH TOKENS*/
+
+export const registerPushToken = async (req, res) => {
+  try {
+    const { id } = req.user;
+    const { token } = req.body;
+    if (!token || typeof token !== "string") {
+      return res.status(400).json({ code: "PUSH_TOKEN_REQUIRED" });
+    }
+
+    await User.findByIdAndUpdate(id, { $addToSet: { pushTokens: token } });
+    return res.status(200).json({ code: "PUSH_TOKEN_REGISTERED" });
+  } catch (err) {
+    return handleError(err, res);
+  }
+};
+
+export const unregisterPushToken = async (req, res) => {
+  try {
+    const { id } = req.user;
+    const { token } = req.body;
+    if (!token || typeof token !== "string") {
+      return res.status(400).json({ code: "PUSH_TOKEN_REQUIRED" });
+    }
+
+    await User.findByIdAndUpdate(id, { $pull: { pushTokens: token } });
+    return res.status(200).json({ code: "PUSH_TOKEN_UNREGISTERED" });
+  } catch (err) {
+    return handleError(err, res);
+  }
+};
