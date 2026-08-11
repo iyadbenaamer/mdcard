@@ -6,7 +6,8 @@ const customPricingSchema = new Schema(
   {
     userId: { type: ObjectId, ref: "User", required: true },
     tierId: { type: ObjectId, ref: "CardTier", required: true },
-    buyPrice: { type: Number, required: true },
+    buyPrice: { type: Number, default: null },
+    buyPriceUsd: { type: Number, default: null },
   },
   { timestamps: true },
 );

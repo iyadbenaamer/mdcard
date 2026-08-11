@@ -27,24 +27,26 @@ export const getEffectiveBuyPrice = (buyPrice, buyPriceUsd, dollarRate) => {
   return Number(buyPrice) || 0;
 };
 
+const isUsableNumber = (value) =>
+  value !== null && value !== undefined && !Number.isNaN(Number(value));
+
 export const getTierPriceForUser = ({
   userRole,
   buyPrice,
   buyPriceUsd,
   sellPrice,
   customBuyPrice,
+  customBuyPriceUsd,
   dollarRate,
 }) => {
   if (userRole === "individual") {
     return Number(sellPrice) || 0;
   }
 
-  if (
-    customBuyPrice !== null &&
-    customBuyPrice !== undefined &&
-    !Number.isNaN(Number(customBuyPrice))
-  ) {
-    return Number(customBuyPrice);
+  // Same USD-first priority as the tier's own price: if either custom price
+  // was set, it fully overrides the tier's buyPrice/buyPriceUsd.
+  if (isUsableNumber(customBuyPrice) || isUsableNumber(customBuyPriceUsd)) {
+    return getEffectiveBuyPrice(customBuyPrice, customBuyPriceUsd, dollarRate);
   }
 
   return getEffectiveBuyPrice(buyPrice, buyPriceUsd, dollarRate);
