@@ -17,6 +17,11 @@ const orderItemSchema = new Schema(
 const orderSchema = new Schema(
   {
     userId: { type: ObjectId, ref: "User", required: true, index: true },
+    // Client-generated idempotency key for the checkout request. Ensures a
+    // retried/duplicated checkout submission (e.g. a double-tap or a
+    // network retry racing the original request) can never create two
+    // orders for the same checkout attempt.
+    checkoutKey: { type: String, default: null },
     totalAmount: { type: Number, required: true, min: 0 },
     items: [orderItemSchema],
   },
@@ -24,6 +29,10 @@ const orderSchema = new Schema(
 );
 
 orderSchema.index({ userId: 1, createdAt: -1 });
+orderSchema.index(
+  { userId: 1, checkoutKey: 1 },
+  { unique: true, partialFilterExpression: { checkoutKey: { $type: "string" } } },
+);
 
 const Order = model("Order", orderSchema, "orders");
 export default Order;

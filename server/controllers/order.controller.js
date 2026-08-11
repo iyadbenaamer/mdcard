@@ -110,6 +110,14 @@ const withDecryptedCode = (card) => {
   return data;
 };
 
+const CHECKOUT_KEY_MIN_LENGTH = 8;
+const CHECKOUT_KEY_MAX_LENGTH = 100;
+
+const isValidCheckoutKey = (value) =>
+  typeof value === "string" &&
+  value.trim().length >= CHECKOUT_KEY_MIN_LENGTH &&
+  value.length <= CHECKOUT_KEY_MAX_LENGTH;
+
 const populateOrderQuery = (query) =>
   query.populate([
     {
@@ -312,18 +320,49 @@ const createExternalCardDocument = async ({
   });
 };
 
+const buildCheckoutSuccessResponse = async (orderDoc, balance) => {
+  const cardIds = (orderDoc.items || []).flatMap((item) =>
+    (item.cards || []).map((card) => (card && card._id ? card._id : card)),
+  );
+  const cards = await Card.find({ _id: { $in: cardIds } });
+  const purchasedCards = cards.map((card) => {
+    const { provider, externalSerialNumber, externalOrderId, ...rest } =
+      card.toObject();
+    return withDecryptedCode(rest);
+  });
+
+  const populatedOrder = await populateOrderQuery(
+    Order.findById(orderDoc._id),
+  );
+
+  const serializedOrder = {
+    ...populatedOrder.toObject(),
+    items: Array.isArray(populatedOrder.items)
+      ? populatedOrder.items.map((item) => {
+          const { provider, externalOrderId, cards: _cards, ...rest } =
+            item.toObject();
+          return { ...serializeOrderItem(rest) };
+        })
+      : [],
+  };
+
+  return {
+    cards: purchasedCards,
+    order: serializedOrder,
+    balance,
+    partialFailure: false,
+    failedItems: [],
+  };
+};
+
 export const checkoutCart = async (req, res) => {
   const reservedCardIds = [];
-  const reservedCards = [];
   const sandboxCreatedIdSet = new Set();
 
   const trackReserved = (cards) => {
     for (let card of cards) {
-      const { provider, externalSerialNumber, externalOrderId, ...rest } =
-        card.toObject();
       const cardId = card._id;
       reservedCardIds.push(cardId);
-      reservedCards.push({ _id: cardId, ...rest });
       if (isSandbox) {
         sandboxCreatedIdSet.add(String(cardId));
       }
@@ -369,6 +408,11 @@ export const checkoutCart = async (req, res) => {
       return res.status(403).json({ code: "AUTH_USER_REQUIRED" });
     }
 
+    if (!isValidCheckoutKey(req.body.checkoutKey)) {
+      return res.status(400).json({ code: "CHECKOUT_KEY_REQUIRED" });
+    }
+    const checkoutKey = req.body.checkoutKey.trim();
+
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ code: "CART_ITEMS_REQUIRED" });
     }
@@ -382,6 +426,21 @@ export const checkoutCart = async (req, res) => {
     }
     if (user.canBuy === false) {
       return res.status(403).json({ code: "USER_CANNOT_BUY" });
+    }
+
+    // Idempotency fast path: if this exact checkout attempt already went
+    // through (e.g. the client retried after a lost response), replay the
+    // original result instead of charging the user a second time.
+    const existingOrder = await Order.findOne({
+      userId: user._id,
+      checkoutKey,
+    });
+    if (existingOrder) {
+      const payload = await buildCheckoutSuccessResponse(
+        existingOrder,
+        user.balance,
+      );
+      return res.status(201).json(payload);
     }
 
     // Helper to avoid floating-point rounding issues for currency (cents precision)
@@ -449,6 +508,7 @@ export const checkoutCart = async (req, res) => {
         buyPriceUsd: tier.buyPriceUsd,
         sellPrice: tier.sellPrice,
         customBuyPrice: customPriceRecord?.buyPrice,
+        customBuyPriceUsd: customPriceRecord?.buyPriceUsd,
         dollarRate,
       });
 
@@ -479,21 +539,25 @@ export const checkoutCart = async (req, res) => {
     // Step 2: ensure user balance covers the full checkout
     if (user.balance < totalCost) {
       if (isSandbox) {
-        const balanceBefore = roundToCents(user.balance);
-        const balanceAfter = roundToCents(balanceBefore + SANDBOX_TOPUP_AMOUNT);
-        user.balance = balanceAfter;
-        await user.save();
+        while (user.balance < totalCost) {
+          const balanceBefore = roundToCents(user.balance);
+          const balanceAfter = roundToCents(balanceBefore + SANDBOX_TOPUP_AMOUNT);
+          user.balance = balanceAfter;
 
-        const deposit = new Transaction({
-          userId: user._id,
-          type: "deposit",
-          amount: SANDBOX_TOPUP_AMOUNT,
-          balanceBefore,
-          balanceAfter,
-        });
-        await deposit.save();
+          const deposit = new Transaction({
+            userId: user._id,
+            type: "deposit",
+            amount: SANDBOX_TOPUP_AMOUNT,
+            balanceBefore,
+            balanceAfter,
+          });
+          await deposit.save();
+        }
+        await user.save();
       }
-      return res.status(400).json({ code: "USER_BALANCE_INSUFFICIENT" });
+      if (user.balance < totalCost) {
+        return res.status(400).json({ code: "USER_BALANCE_INSUFFICIENT" });
+      }
     }
 
     const reserveLocalCards = async (tierId, quantity) => {
@@ -701,19 +765,44 @@ export const checkoutCart = async (req, res) => {
       }
     }
 
-    // Step 5: finalize checkout (charge balance, create order, record transaction)
+    // Step 5: finalize checkout (create order, charge balance, record transaction)
     const balanceBefore = roundToCents(user.balance);
     const balanceAfter = roundToCents(balanceBefore - totalCost);
 
-    user.balance = balanceAfter;
-    await user.save();
-
     const order = new Order({
       userId: user._id,
+      checkoutKey,
       totalAmount: totalCost,
       items: orderItems,
     });
-    let savedOrder = await order.save();
+
+    let savedOrder;
+    try {
+      savedOrder = await order.save();
+    } catch (err) {
+      if (err?.code === 11000) {
+        // Another request with the same checkoutKey finished this checkout
+        // concurrently (the race this key exists to prevent) — release
+        // what we reserved here and replay the winning request's result
+        // instead of charging the user twice.
+        await releaseReservedCards();
+        const winningOrder = await Order.findOne({
+          userId: user._id,
+          checkoutKey,
+        });
+        if (winningOrder) {
+          const payload = await buildCheckoutSuccessResponse(
+            winningOrder,
+            user.balance,
+          );
+          return res.status(201).json(payload);
+        }
+      }
+      throw err;
+    }
+
+    user.balance = balanceAfter;
+    await user.save();
 
     const transaction = new Transaction({
       userId: user._id,
@@ -725,32 +814,11 @@ export const checkoutCart = async (req, res) => {
     });
     await transaction.save();
 
-    const purchasedCards = reservedCards.map(withDecryptedCode);
-
-    const populatedOrder = await populateOrderQuery(
-      Order.findById(savedOrder._id),
+    const payload = await buildCheckoutSuccessResponse(
+      savedOrder,
+      user.balance,
     );
-
-    savedOrder = {
-      ...populatedOrder.toObject(),
-      items: Array.isArray(populatedOrder.items)
-        ? populatedOrder.items.map((item) => {
-            const { provider, externalOrderId, cards, ...rest } =
-              item.toObject();
-            return {
-              ...serializeOrderItem(rest),
-            };
-          })
-        : [],
-    };
-
-    return res.status(201).json({
-      cards: purchasedCards,
-      order: savedOrder,
-      balance: user.balance,
-      partialFailure: false,
-      failedItems: [],
-    });
+    return res.status(201).json(payload);
   } catch (err) {
     try {
       await releaseReservedCards();
