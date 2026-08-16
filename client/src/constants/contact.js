@@ -6,6 +6,7 @@ export const CONTACT_INFO = {
   email: "info@mdcard.com.ly",
   whatsappNumber: "0927597732",
   phoneNumber: "0927597732",
+  playStore: "https://play.google.com/store/apps/details?id=com.mdcard",
 };
 
 export const CONTACT_LINKS = {

@@ -14,13 +14,14 @@ export const content = {
     },
     hero: {
       title: "MD Card",
-      subtitle: "الحل الذكي لتوزيع وبيع كروت الدفع المسبق محليًا ودوليًا",
+      subtitle: "منصّة كروت الدفع المسبق للمستخدمين والمحلات التجارية معًا",
       description:
-        "نقدم حلول توزيع متكاملة عبر نقاط البيع (POS) لتمكين المحلات التجارية من بيع كروت الدفع المسبق بسرعة، أمان، وموثوقية عالية.",
+        "اشترِ كروت الشحن والهدايا الرقمية فورًا بنفسك عبر تطبيقنا، أو انضم إلى شبكة نقاط البيع الخاصة بنا كصاحب محل - كل ذلك بسرعة، أمان، وموثوقية عالية.",
+      playStoreCta: "حمّله من Google Play",
     },
     homeAbout: {
       title: "من نحن",
-      text: "MD Card إحدى شركات العامر، متخصصة في توزيع كروت الدفع المسبق المحلية والدولية عبر شبكة واسعة من نقاط البيع. نعمل على تمكين المحلات التجارية من تقديم خدمات الشحن والبطاقات الرقمية لعملائها بسهولة وكفاءة عالية.",
+      text: "MD Card إحدى شركات العامر، متخصصة في توزيع كروت الدفع المسبق المحلية والدولية. نخدم الأفراد مباشرة عبر تطبيقنا للجوال بشراء فوري وآمن، ونمكّن أيضًا المحلات التجارية من تقديم خدمات الشحن والبطاقات الرقمية لعملائها عبر شبكة واسعة من نقاط البيع.",
     },
     homeServices: {
       title: "خدماتنا",
@@ -35,7 +36,7 @@ export const content = {
         },
         {
           title: "دعم فني مستمر",
-          body: "فريق دعم جاهز لمساعدة شركائنا وضمان استمرارية العمل دون انقطاع.",
+          body: "فريق دعم جاهز لمساعدة عملائنا وشركائنا وضمان استمرارية العمل دون انقطاع.",
         },
       ],
     },
@@ -44,30 +45,30 @@ export const content = {
       items: [
         "معاملات آمنة وسريعة",
         "نظام تقني موثوق",
-        "شراكات طويلة الأمد مع المحلات",
+        "علاقة موثوقة مع عملائنا وشركائنا",
         "إدارة احترافية وخبرة في السوق",
       ],
     },
     aboutPage: {
       title: "من نحن",
       body: [
-        "MD Card هي شركة متخصصة في توزيع كروت الدفع المسبق المحلية والدولية، وتعمل تحت مظلة شركة العامر. تأسست الشركة بهدف تطوير قطاع الخدمات الرقمية وتسهيل وصول المحلات التجارية إلى حلول بيع حديثة وآمنة.",
-        "نحن لا نقدم مجرد منتج، بل نوفر نظام توزيع متكامل يعتمد على أجهزة نقاط البيع (POS)، مما يمنح شركاءنا القدرة على خدمة عملائهم بكفاءة عالية وسرعة في التنفيذ.",
-        "نؤمن بأن التحول الرقمي هو مستقبل التجارة، ولذلك نعمل باستمرار على تطوير أنظمتنا وتوسيع شبكتنا لضمان أفضل تجربة لشركائنا في السوق الليبي.",
+        "MD Card هي شركة متخصصة في توزيع كروت الدفع المسبق المحلية والدولية، وتعمل تحت مظلة شركة العامر. تأسست الشركة بهدف تطوير قطاع الخدمات الرقمية وتسهيل وصول الأفراد والمحلات التجارية إلى حلول شراء وبيع حديثة وآمنة.",
+        "نقدّم للأفراد تطبيق جوال يتيح شراء الكروت مباشرة وفوريًا، وللمحلات التجارية نظام توزيع متكامل يعتمد على أجهزة نقاط البيع (POS)، مما يمنح الجميع تجربة سريعة وآمنة وسهلة الاستخدام.",
+        "نؤمن بأن التحول الرقمي هو مستقبل التجارة، ولذلك نعمل باستمرار على تطوير أنظمتنا وتوسيع شبكتنا لضمان أفضل تجربة لعملائنا وشركائنا في السوق الليبي.",
       ],
       visionTitle: "رؤيتنا",
       vision:
         "أن نكون الشركة الرائدة في توزيع كروت الدفع المسبق والحلول الرقمية في ليبيا.",
       missionTitle: "رسالتنا",
       mission:
-        "تمكين المحلات التجارية من تقديم خدمات رقمية موثوقة وسريعة من خلال أنظمة توزيع احترافية وتقنيات حديثة.",
+        "تمكين الأفراد والمحلات التجارية من الحصول على خدمات رقمية موثوقة وسريعة، عبر تطبيق جوال مباشر للأفراد وأنظمة توزيع احترافية للمحلات.",
       valuesTitle: "قيمنا",
       values: [
         "الاحترافية",
         "الموثوقية",
         "السرعة",
         "الشفافية",
-        "الشراكة طويلة الأمد",
+        "علاقات طويلة الأمد",
       ],
     },
     servicesPage: {
@@ -77,7 +78,7 @@ export const content = {
       items: [
         {
           title: "1. توزيع كروت الدفع المسبق",
-          body: "نقدم باقة متنوعة من الكروت المحلية والدولية التي تلبي احتياجات الأفراد والمحلات التجارية.",
+          body: "نقدّم باقة متنوعة من الكروت المحلية والدولية عبر تطبيقنا للجوال للأفراد، وشبكة التوزيع لدينا للمحلات التجارية.",
         },
         {
           title: "2. تزويد أجهزة نقاط البيع (POS)",
@@ -89,7 +90,7 @@ export const content = {
         },
         {
           title: "4. الدعم الفني والتشغيلي",
-          body: "فريق دعم متخصص متاح لتقديم المساعدة الفنية والتشغيلية لضمان أفضل أداء للشركاء.",
+          body: "فريق دعم متخصص متاح لتقديم المساعدة الفنية والتشغيلية لضمان أفضل أداء لعملائنا وشركائنا.",
         },
       ],
     },
@@ -106,7 +107,7 @@ export const content = {
     },
     footer: {
       short:
-        "MD Card إحدى شركات العامر، متخصصة في توزيع كروت الدفع المسبق المحلية والدولية عبر شبكة نقاط بيع حديثة داخل ليبيا، مع التزام كامل بالسرعة والموثوقية والاحترافية.",
+        "MD Card إحدى شركات العامر، تخدم الأفراد مباشرة عبر تطبيق الجوال وتمكّن المحلات التجارية عبر شبكة نقاط بيع حديثة داخل ليبيا، مع التزام كامل بالسرعة والموثوقية والاحترافية.",
       rights: "جميع الحقوق محفوظة",
     },
   },
@@ -124,13 +125,14 @@ export const content = {
     hero: {
       title: "MD Card",
       subtitle:
-        "The smart solution for local and international prepaid card distribution",
+        "A prepaid card platform for individuals and businesse users",
       description:
-        "We provide integrated POS-based distribution solutions that help shops sell prepaid cards with speed, security, and high reliability.",
+        "Buy top-up and digital gift cards instantly for yourself through our app, or join our POS network as a shop owner - all with speed, security, and high reliability.",
+      playStoreCta: "Get it on Google Play",
     },
     homeAbout: {
       title: "Who We Are",
-      text: "MD Card, one of Al-Amer LLC companies, specializes in distributing local and international prepaid cards through a wide POS network. We enable shops to deliver top-up and digital card services with ease and high efficiency.",
+      text: "MD Card, one of Al-Amer LLC companies, specializes in distributing local and international prepaid cards. We serve individuals directly through our mobile app with instant, secure purchases, and we also enable shops to offer top-up and digital card services to their customers through a wide POS network.",
     },
     homeServices: {
       title: "Our Services",
@@ -145,7 +147,7 @@ export const content = {
         },
         {
           title: "Continuous Technical Support",
-          body: "Our support team is ready to assist partners and ensure uninterrupted operations.",
+          body: "Our support team is ready to assist customers and partners and ensure uninterrupted operations.",
         },
       ],
     },
@@ -154,30 +156,30 @@ export const content = {
       items: [
         "Secure and fast transactions",
         "Reliable technical platform",
-        "Long-term partnerships with shops",
+        "A trusted relationship with our customers and partners",
         "Professional management and market expertise",
       ],
     },
     aboutPage: {
       title: "About Us",
       body: [
-        "MD Card is a company specialized in distributing local and international prepaid cards under the umbrella of Al-Amer LLC. The company was founded to develop digital services and simplify access to modern, secure retail solutions.",
-        "We provide more than just a product. We deliver an integrated distribution system powered by POS devices, enabling our partners to serve customers efficiently and quickly.",
-        "We believe digital transformation is the future of commerce, so we continuously improve our systems and expand our network to deliver the best partner experience in the Libyan market.",
+        "MD Card is a company specialized in distributing local and international prepaid cards under the umbrella of Al-Amer LLC. The company was founded to develop digital services and simplify access to modern, secure buying and selling solutions for individuals and shops alike.",
+        "We offer individuals a mobile app for instant, direct purchases, and shops an integrated distribution system powered by POS devices - giving everyone a fast, secure, and easy experience.",
+        "We believe digital transformation is the future of commerce, so we continuously improve our systems and expand our network to deliver the best experience for our customers and partners in the Libyan market.",
       ],
       visionTitle: "Our Vision",
       vision:
         "To be the leading company in prepaid card distribution and digital solutions in Libya.",
       missionTitle: "Our Mission",
       mission:
-        "Empower shops to offer reliable and fast digital services through professional distribution systems and modern technology.",
+        "Empower individuals and shops with reliable, fast digital services - through a direct mobile app for individuals and professional distribution systems for shops.",
       valuesTitle: "Our Values",
       values: [
         "Professionalism",
         "Reliability",
         "Speed",
         "Transparency",
-        "Long-term Partnership",
+        "Long-term Relationships",
       ],
     },
     servicesPage: {
@@ -187,7 +189,7 @@ export const content = {
       items: [
         {
           title: "1. Prepaid Card Distribution",
-          body: "We offer a diverse package of local and international cards that suits individuals and retail businesses.",
+          body: "We offer a diverse package of local and international cards through our mobile app for individuals and our distribution network for shops.",
         },
         {
           title: "2. POS Device Provision",
@@ -199,7 +201,7 @@ export const content = {
         },
         {
           title: "4. Technical and Operational Support",
-          body: "Our specialized team offers technical and operational support to ensure the best performance for partners.",
+          body: "Our specialized team offers technical and operational support to ensure the best performance for our customers and partners.",
         },
       ],
     },
@@ -216,7 +218,7 @@ export const content = {
     },
     footer: {
       short:
-        "MD Card, one of Al-Amer LLC companies, specializes in distributing local and international prepaid cards through a modern POS network in Libya, with full commitment to speed, reliability, and professionalism.",
+        "MD Card, one of Al-Amer LLC companies, serves individuals directly through its mobile app and empowers shops through a modern POS network in Libya, with full commitment to speed, reliability, and professionalism.",
       rights: "All rights reserved",
     },
   },
