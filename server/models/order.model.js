@@ -16,7 +16,9 @@ const orderItemSchema = new Schema(
 
 const orderSchema = new Schema(
   {
-    userId: { type: ObjectId, ref: "User", required: true, index: true },
+    // No standalone index here - the { userId, createdAt } index below
+    // already serves any query that filters on userId alone.
+    userId: { type: ObjectId, ref: "User", required: true },
     // Client-generated idempotency key for the checkout request. Ensures a
     // retried/duplicated checkout submission (e.g. a double-tap or a
     // network retry racing the original request) can never create two

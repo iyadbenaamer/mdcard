@@ -6,12 +6,13 @@ const isSandbox = isSandboxMode();
 
 const transactionSchema = new Schema(
   {
-    userId: { type: ObjectId, ref: "User", required: true, index: true },
+    // No standalone index here - the compound indexes below (both prefixed
+    // by userId) already serve any query that filters on userId alone.
+    userId: { type: ObjectId, ref: "User", required: true },
     type: {
       type: String,
       enum: ["deposit", "purchase", "refund"],
       required: true,
-      index: true,
     },
     amount: { type: Number, required: true, min: 0 },
     balanceBefore: { type: Number, min: 0 },
@@ -52,7 +53,12 @@ transactionSchema.pre("validate", function () {
   }
 });
 
+// Wallet history (transaction.controller.js `get`) always filters by userId,
+// optionally by type, and defaults to sorting by createdAt - this pair of
+// indexes covers both the unfiltered and type-filtered cases without an
+// in-memory sort.
 transactionSchema.index({ userId: 1, createdAt: -1 });
+transactionSchema.index({ userId: 1, type: 1, createdAt: -1 });
 
 const Transaction = model("Transaction", transactionSchema, "transactions");
 export default Transaction;

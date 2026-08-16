@@ -17,5 +17,11 @@ const cardTierSchema = new Schema(
   { timestamps: true },
 );
 
+// Backs the tier-listing query for a card type's product page
+// (find({ typeId, isActive: true }).sort({ order: 1, createdAt: -1 })) and
+// the equality lookup on typeId done inside cardType.controller.js's
+// tier-detail aggregation - both hit on essentially every product view.
+cardTierSchema.index({ typeId: 1, isActive: 1, order: 1, createdAt: -1 });
+
 const CardTier = model("CardTier", cardTierSchema, "card_tiers");
 export default CardTier;

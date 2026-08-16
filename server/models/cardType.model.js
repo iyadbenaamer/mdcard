@@ -30,5 +30,14 @@ const cardTypeSchema = new Schema(
   { timestamps: true },
 );
 
+// cardCategory.controller.js's getAll (category list, shown on every home
+// screen load) and cardType.controller.js's getByCategory both $lookup this
+// collection by categoryId, then filter/sort on isActive/order.
+cardTypeSchema.index({ categoryId: 1, isActive: 1, order: 1 });
+// cardType.controller.js's getPaginated (browse-all) and
+// search.controller.js's searchCardTypes both filter on isActive alone and
+// sort by createdAt.
+cardTypeSchema.index({ isActive: 1, createdAt: -1 });
+
 const CardType = model("CardType", cardTypeSchema, "card_types");
 export default CardType;
