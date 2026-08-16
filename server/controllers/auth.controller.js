@@ -2,12 +2,17 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
 import User from "../models/user.model.js";
+import Session from "../models/session.model.js";
+import ApiKey from "../models/apiKey.model.js";
 
 import { generateCode } from "../utils/generateCode.js";
 import { sendCode } from "../services/sendCode.js";
 import { handleError } from "../utils/errorHandler.js";
 import Setting from "../models/setting.model.js";
 import { isSandboxMode } from "../utils/sandbox.js";
+import { generateApiKeySecret, hashApiKey, getKeyPrefix } from "../utils/apiKey.js";
+import { createDeviceChallenge } from "../utils/deviceChallenge.js";
+import { issueSessionForRequest, DeviceAuthError } from "../services/deviceAuth.js";
 import {
   MAX_DAILY_RESENDS,
   evaluateResend,
@@ -16,9 +21,6 @@ import {
 } from "../utils/otpPolicy.js";
 
 const CODE_EXPIRATION = process.env.CODE_EXPIRATION || "1h";
-const ACCESS_TOKEN_EXPIRATION = process.env.ACCESS_TOKEN_EXPIRATION || "14d";
-const REMEMBER_ME_ACCESS_EXPIRATION =
-  process.env.REMEMBER_ME_ACCESS_EXPIRATION || "90d";
 const isSandbox = isSandboxMode();
 
 const checkCanSendCode = (user) => user?.canSendCode !== false;
@@ -40,16 +42,21 @@ const resendRejectionResponse = (decision, notAllowedCode, dailyLimitCode) => ({
   resendAfter: decision.resendAfter,
 });
 
-const createAccessToken = (userId, expiresIn = ACCESS_TOKEN_EXPIRATION) =>
-  jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-    expiresIn,
-  });
-
-const createAuthToken = (userId, { rememberMe = false } = {}) =>
-  createAccessToken(
-    userId,
-    rememberMe ? REMEMBER_ME_ACCESS_EXPIRATION : ACCESS_TOKEN_EXPIRATION,
-  );
+// Every login-equivalent flow (login, verifyAccount, resetPassword) needs to
+// verify the device's attestation and issue a session the same way - this
+// wraps issueSessionForRequest so each call site just handles the
+// DeviceAuthError -> HTTP response mapping consistently.
+const issueSession = async (user, req, res, options) => {
+  try {
+    return { accessToken: await issueSessionForRequest(user, req, options) };
+  } catch (err) {
+    if (err instanceof DeviceAuthError) {
+      res.status(err.status).json({ code: err.code });
+      return null;
+    }
+    throw err;
+  }
+};
 
 export const signup = async (req, res) => {
   try {
@@ -80,6 +87,7 @@ export const signup = async (req, res) => {
       password: hashedPassword,
       isActive: isSandbox || role === "individual",
     });
+    req.logAction("signup", { userId: newUser._id });
 
     const verificationCode = generateCode(6);
     const verificationToken = jwt.sign(
@@ -105,6 +113,22 @@ export const signup = async (req, res) => {
       newUser.isActive = true;
     }
     await newUser.save();
+
+    if (isSandbox) {
+      // Sandbox signup skips phone verification and admin activation, so
+      // this is also where the account gets its one API key - there's no
+      // other step a tester would go through to get one. Fetch it via
+      // POST /get-api-key with this same phone/password.
+      const secret = generateApiKeySecret();
+      await ApiKey.create({
+        user: newUser._id,
+        name: "Sandbox Testing Key",
+        keyHash: hashApiKey(secret),
+        keyPrefix: getKeyPrefix(secret),
+        createdByType: "user",
+        sandboxSecret: secret,
+      });
+    }
 
     const responsePayload = { code: "AUTH_USER_CREATED" };
     if (sendDecision?.allowed) {
@@ -162,6 +186,7 @@ export const checkPhoneForResetPassword = async (req, res) => {
 
 /*LOGIN USER*/
 export const login = async (req, res) => {
+  req.logAction("login");
   try {
     let { phone, password, rememberMe } = req.body;
     phone = phone.trim();
@@ -172,6 +197,7 @@ export const login = async (req, res) => {
     if (!user) {
       return res.status(404).json({ code: "AUTH_INVALID_LOGIN" });
     }
+    req.logAction("login", { userId: user._id });
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ code: "AUTH_INVALID_LOGIN" });
@@ -220,12 +246,16 @@ export const login = async (req, res) => {
       return res.status(401).json(responsePayload);
     }
     /*
-    if the phone is verified and it's correct as well as the password,
-    then a token will be created and returned to the user
+    if the phone is verified and it's correct as well as the password, the
+    device is attested and a session is created for it
     */
-    const accessToken = createAuthToken(user.id, {
+    const sessionResult = await issueSession(user, req, res, {
       rememberMe: Boolean(rememberMe),
     });
+    if (!sessionResult) {
+      return; // issueSession already sent the error response
+    }
+    const { accessToken } = sessionResult;
 
     const support = await Setting.findOne({ key: "support" }).select("value");
 
@@ -296,8 +326,11 @@ export const verifyAccount = async (req, res) => {
       user.verificationStatus.token = null;
       resetCodeState(user.verificationStatus);
       await user.save();
-      const accessToken = createAuthToken(user.id);
-      return res.status(200).json({ isVerified: true, accessToken });
+      const sessionResult = await issueSession(user, req, res);
+      if (!sessionResult) {
+        return; // issueSession already sent the error response
+      }
+      return res.status(200).json({ isVerified: true, ...sessionResult });
     } catch {
       return res.status(401).json({ code: "AUTH_VERIFICATION_TOKEN_EXPIRED" });
     }
@@ -307,6 +340,7 @@ export const verifyAccount = async (req, res) => {
 };
 
 export const resetPassword = async (req, res) => {
+  req.logAction("password_change");
   try {
     const { password } = req.body;
     const { token } = req.params;
@@ -322,6 +356,7 @@ export const resetPassword = async (req, res) => {
       if (!user) {
         return res.status(401).json({ code: "AUTH_INVALID_RESET_TOKEN" });
       }
+      req.logAction("password_change", { userId: user._id });
       if (user.resetPassword.token === null) {
         return res.status(400).json({ code: "AUTH_RESET_TOKEN_MISSING" });
       }
@@ -337,10 +372,13 @@ export const resetPassword = async (req, res) => {
       resetCodeState(user.resetPassword);
       resetCodeState(user.verificationStatus);
       await user.save();
-      const accessToken = createAuthToken(user.id);
+      const sessionResult = await issueSession(user, req, res);
+      if (!sessionResult) {
+        return; // issueSession already sent the error response
+      }
       return res.status(200).json({
         isVerified: true,
-        accessToken,
+        ...sessionResult,
       });
     } catch {
       return res
@@ -356,9 +394,18 @@ export const sendVerificationCode = async (req, res) => {
   try {
     let { type, phone } = req.body;
     phone = phone.trim().toLowerCase();
+    // Only the password-reset code send is tracked here - account
+    // verification codes (type === "verify-account") are part of signup,
+    // already covered by the "signup" log entry, not "verification_code".
+    if (type === "reset-password") {
+      req.logAction("verification_code");
+    }
     const user = await User.findOne({ phone });
     if (!user) {
       return res.status(404).json({ code: "AUTH_USER_NOT_FOUND" });
+    }
+    if (type === "reset-password") {
+      req.logAction("verification_code", { userId: user._id });
     }
     if (!checkCanSendCode(user)) {
       return res.status(403).json({ code: "AUTH_CODE_SENDING_DISABLED" });
@@ -450,6 +497,10 @@ export const sendVerificationCode = async (req, res) => {
 };
 
 export const verifyResetPasswordCode = async (req, res) => {
+  // This only checks the code and hands back the reset token - the password
+  // itself isn't changed until resetPassword, which is where
+  // "password_change" belongs.
+  req.logAction("verification_code");
   try {
     let { code, phone } = req.body;
     phone = phone.trim().toLowerCase();
@@ -457,7 +508,11 @@ export const verifyResetPasswordCode = async (req, res) => {
     if (!user) {
       return res.status(400).json({ code: "AUTH_USER_NOT_FOUND" });
     }
+    req.logAction("verification_code", { userId: user._id });
     if (user.resetPassword.remainingAttempts <= 0) {
+      req.logAction("verification_code", {
+        remainingAttempts: user.resetPassword.remainingAttempts,
+      });
       return res.status(429).json({
         code: "AUTH_RESET_ATTEMPTS_EXCEEDED",
         resendAfter: user.resetPassword.resendAfter,
@@ -474,6 +529,9 @@ export const verifyResetPasswordCode = async (req, res) => {
       if (tokenInfo.verificationCode !== code) {
         user.resetPassword.remainingAttempts -= 1;
         await user.save();
+        req.logAction("verification_code", {
+          remainingAttempts: user.resetPassword.remainingAttempts,
+        });
         return res.status(401).json({ code: "AUTH_INVALID_CODE" });
       }
       return res.status(200).json({ token: user.resetPassword.token });
@@ -516,6 +574,47 @@ export const verifyResetPasswordToken = async (req, res) => {
         code: "AUTH_RESET_LINK_INVALID_OR_EXPIRED",
       });
     }
+  } catch (err) {
+    return handleError(err, res);
+  }
+};
+
+// Issues a short-lived nonce the client embeds in its Play Integrity / App
+// Attest attestation request. Called before login/verifyAccount/resetPassword
+// so the attestation the device produces can't be replayed from an earlier
+// session-creation attempt.
+export const getDeviceChallenge = async (req, res) => {
+  try {
+    return res.status(200).json({ challenge: createDeviceChallenge() });
+  } catch (err) {
+    return handleError(err, res);
+  }
+};
+
+// Revokes the session that authenticated this request. Session-only (see
+// requireSession) - there's no "current session" for an API key.
+export const logout = async (req, res) => {
+  try {
+    req.session.revokedAt = new Date();
+    req.session.revokedReason = "logout";
+    await req.session.save();
+    return res.status(200).json({ code: "AUTH_LOGGED_OUT" });
+  } catch (err) {
+    return handleError(err, res);
+  }
+};
+
+// Revokes every active session for the current user, e.g. "sign out of all
+// devices" after a lost phone. Works for either auth method - a business
+// integration hitting this via its API key is a legitimate way to kill every
+// phone session on the account.
+export const logoutAll = async (req, res) => {
+  try {
+    await Session.updateMany(
+      { user: req.user._id, revokedAt: null },
+      { $set: { revokedAt: new Date(), revokedReason: "logout_all" } },
+    );
+    return res.status(200).json({ code: "AUTH_LOGGED_OUT_ALL" });
   } catch (err) {
     return handleError(err, res);
   }

@@ -356,6 +356,7 @@ const buildCheckoutSuccessResponse = async (orderDoc, balance) => {
 };
 
 export const checkoutCart = async (req, res) => {
+  req.logAction("checkout", { userId: req.user?.id });
   const reservedCardIds = [];
   const sandboxCreatedIdSet = new Set();
 

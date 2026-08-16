@@ -21,8 +21,10 @@ import orderRoute from "./routes/order.route.js";
 import transactionRoute from "./routes/transaction.route.js";
 import dealRoute from "./routes/deal.route.js";
 import favoriteRoute from "./routes/favorite.route.js";
+import sessionRoute from "./routes/session.route.js";
 import connectDB from "./config/db.js";
 import openApiSpec from "./docs/openapi.js";
+import { attachRequestLogger } from "./middleware/requestLog.middleware.js";
 
 dotenv.config();
 
@@ -65,6 +67,7 @@ if (process.env.NODE_ENV === "development") {
   app.use("/api/storage", express.static(storagePath, staticOptions));
 }
 app.use(cookieParser(cookieSecret));
+app.use(attachRequestLogger);
 
 app.use(
   rateLimit({
@@ -95,6 +98,7 @@ app.use("/api/orders", orderRoute);
 app.use("/api/transactions", transactionRoute);
 app.use("/api/deals", dealRoute);
 app.use("/api/favorites", favoriteRoute);
+app.use("/api/sessions", sessionRoute);
 
 /*MONGOOSE SETUP*/
 connectDB();

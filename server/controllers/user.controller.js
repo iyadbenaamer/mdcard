@@ -20,6 +20,7 @@ export const get = async (req, res) => {
         isActive: user.isActive,
         canBuy: user.canBuy,
         canSendCode: user.canSendCode,
+        canManageApiKeys: user.canManageApiKeys,
         verificationStatus: user.verificationStatus,
         createdAt: user.createdAt,
         updatedAt: user.updatedAt,

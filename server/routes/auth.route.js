@@ -4,7 +4,10 @@ import rateLimit from "express-rate-limit";
 import {
   checkPhoneForRegister,
   checkPhoneForResetPassword,
+  getDeviceChallenge,
   login,
+  logout,
+  logoutAll,
   resetPassword,
   sendVerificationCode,
   signup,
@@ -13,8 +16,9 @@ import {
   verifyResetPasswordCode,
   verifyResetPasswordToken,
 } from "../controllers/auth.controller.js";
+import { getApiKey } from "../controllers/apiKey.controller.js";
 
-import { verifyToken } from "../middleware/auth.middleware.js";
+import { verifyToken, requireSession } from "../middleware/auth.middleware.js";
 import { verifyCaptcha, verifyFields } from "../middleware/validate.middleware.js";
 
 const router = express.Router();
@@ -42,6 +46,11 @@ const otpLimiter = rateLimit({
 
 router.post("/signup", authLimiter, verifyCaptcha, verifyFields, signup);
 
+// Sandbox-only: fetches the API key `signup` auto-creates for a sandbox
+// account, using phone+password instead of a device session - 404s outside
+// sandbox (see apiKey.controller.js getApiKey).
+router.post("/get-api-key", authLimiter, getApiKey);
+
 // checks if the concerned phone is already registered for registration
 router.get(
   "/check-phone-availability/register/:phone",
@@ -56,11 +65,21 @@ router.get(
   checkPhoneForResetPassword,
 );
 
+// issues a short-lived nonce for the device attestation flow (Play
+// Integrity / App Attest) that login/verify-account/reset-password require
+router.post("/device-challenge", authLimiter, getDeviceChallenge);
+
 // login with phone and password
 router.post("/login", authLimiter, login);
 
 // verify access token
 router.get("/verify-access", verifyToken, verifyAccessToken);
+
+// revoke the current device session
+router.post("/logout", verifyToken, requireSession, logout);
+
+// revoke every session on the account (any auth method)
+router.post("/logout-all", verifyToken, logoutAll);
 
 //sends the verification code whenever the user resets the password or verifies the account
 router.post("/send-verification-code/", otpLimiter, sendVerificationCode);

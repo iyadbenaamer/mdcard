@@ -42,6 +42,10 @@ const userSchema = new Schema(
     // if the user is blocked by admin, they won't be able to buy cards, but they can still login and use the app
     canBuy: { type: Boolean, default: true },
     canSendCode: { type: Boolean, default: true },
+    // business-only: lets the user self-serve their own API keys (create/revoke,
+    // up to API_KEY_SOFT_CAP) from the mobile app instead of asking an admin.
+    // Granted per-account by an admin in mdcard-panel.
+    canManageApiKeys: { type: Boolean, default: false },
     // Expo push tokens for devices the user is logged into; used to deliver
     // notifications (e.g. dollar rate changes) via the Expo push service.
     pushTokens: { type: [String], default: [] },
