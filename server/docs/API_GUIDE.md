@@ -5,7 +5,7 @@ This guide shows how to integrate with the MD Card API as a business partner: au
 - Swagger UI: `GET /api/docs`
 - Raw OpenAPI JSON: `GET /api/docs.json`
 
-All paths below are relative to `/api` (e.g. `/login` means `POST /api/login`).
+All paths below are relative to `/api` (e.g. `/verify-access` means `GET /api/verify-access`).
 
 ## Who this is for
 
@@ -13,30 +13,39 @@ This API is for third-party business applications integrating with MD Card — i
 
 ## 1. Getting access
 
-Business accounts are set up by MD Card directly — there's no public signup form. Once you have a phone number and password, authenticate with:
+Business accounts are set up by MD Card directly — there's no public signup form, and no login step either. As part of onboarding, MD Card issues your integration an API key (a string starting with `mdc_live_`). Send it as a bearer token on every request:
 
 ```
-POST /login
-{ "phone": "0912345678", "password": "Str0ng!Pass" }
+Authorization: Bearer mdc_live_...
+```
+
+That's the entire authentication flow. There's no token expiry to manage and nothing to refresh — the key works until MD Card revokes or rotates it for you. Treat it as a secret: keep it server-side only, never in a client app.
+
+```
+GET /verify-access
+Authorization: Bearer mdc_live_...
 
 → 200
-{
-  "profile": { "id": "64f1a2b3c4d5e6f7a8b9c0d1", "name": "Acme Trading", "role": "business", "balance": 500, ... },
-  "accessToken": "eyJhbGciOi..."
-}
+{ "valid": true, "role": "business", "id": "64f1a2b3c4d5e6f7a8b9c0d1" }
 ```
 
-Send that token on every request after that:
+Want to check the key is still active without making a "real" request? `GET /verify-access` is a cheap way to do that.
+
+Need a new key, or need one revoked (an integration was retired, a key leaked)? Contact MD Card directly — key issuance is admin-managed, not self-service.
+
+**Testing without a live key:** sandbox (a separate deployment with relaxed stock/balance rules, see §8) is self-service — get your own test key against the sandbox base URL, no need to contact MD Card:
 
 ```
-Authorization: Bearer eyJhbGciOi...
+POST /signup
+{ "name": "Test Co", "phone": "0912345678", "password": "Test1234!", "role": "business" }
+→ 201 { "code": "AUTH_USER_CREATED" }
+
+POST /get-api-key
+{ "phone": "0912345678", "password": "Test1234!" }
+→ 200 { "name": "Sandbox Testing Key", "keyPrefix": "mdc_live_...", "secret": "mdc_live_...", "createdAt": "..." }
 ```
 
-A token is valid for a while and then expires; when it does, calls start returning `401 { "code": "AUTH_TOKEN_EXPIRED" }` and you simply log in again — there's no separate refresh step. Passing `"rememberMe": true` in the login request issues a longer-lived token, useful for a server-to-server integration that shouldn't need to re-authenticate often.
-
-Already logged in and just want to change the password? `PATCH /user { "password": "N3wPass!23" }`. Forgot it entirely, or need a new account provisioned? Contact MD Card directly — there's no self-service recovery flow in this API.
-
-**Testing without a live account:** a sandbox environment is available where self-service signup (`POST /signup { "name", "phone", "password", "role": "business" }`) is turned on, so you can create disposable test accounts instead of waiting on a real one. Ask MD Card for sandbox access; the interactive docs at `/api/docs` will show the `/signup` endpoint whenever you're pointed at a sandbox deployment (it isn't shown, and doesn't exist, in production).
+`/signup` and `/get-api-key` only exist in sandbox — there's no self-service signup against production, and `role` is always forced to `"business"` regardless of what you send, since that's the only role API keys can be issued for. `/get-api-key` skips phone verification, admin activation, and login entirely; it just returns the one key `/signup` already created for the account, identified by phone+password. Calling it again returns that same key, not a new one — unlike a real key, a sandbox key stays retrievable this way instead of being shown only once.
 
 ## 2. Errors
 
@@ -51,7 +60,7 @@ There's no human-readable message field — branch on `code`. A few you'll see a
 | Code | Meaning |
 | --- | --- |
 | `AUTH_LOGIN_REQUIRED` | No token was sent. |
-| `AUTH_TOKEN_EXPIRED` | Log in again. |
+| `AUTH_API_KEY_INVALID` | The key is missing, unknown, or revoked. Check with MD Card. |
 | `AUTH_USER_INACTIVE` | This account isn't active yet — check with MD Card. |
 | `SERVER_ERROR` | Something broke on our end; not caused by your request. |
 
@@ -158,16 +167,15 @@ Any endpoint that supports it takes `page` (default `1`) and `limit` (default `1
 
 | Scope | Limit |
 | --- | --- |
-| General API use | 300 requests / minute |
-| Login | 20 requests / 15 minutes |
+| General API use | 300 requests / minute per IP |
+| Per API key | 1000 requests / minute, on top of the general limit — so a single busy integration doesn't get throttled by traffic from a completely different one |
 
 If you're building something that calls the API frequently (e.g. syncing a catalog), cache what you can rather than polling — catalog data doesn't change every second.
 
 ## 8. Sandbox mode
 
-For integration testing, MD Card can provision you a sandbox environment where:
+For integration testing, MD Card can provision you a sandbox environment and a sandbox API key where:
 
-- Self-service signup is available (see §1), so you can create test accounts on demand instead of waiting on a real one.
 - Stock/availability checks are relaxed and low balances are topped up automatically, so you can run through checkout end-to-end without needing real inventory or funds.
 
 Behavior in sandbox is called out endpoint-by-endpoint in the interactive docs at `/api/docs` — treat it as a testing convenience, not a preview of production behavior.

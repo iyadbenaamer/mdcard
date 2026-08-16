@@ -1,28 +1,17 @@
 import { isSandboxMode } from "../utils/sandbox.js";
 
-const bearerAuth = [{ bearerAuth: [] }];
 const isSandbox = isSandboxMode();
+
+const bearerAuth = [{ bearerAuth: [] }];
 const authErrorResponses = {
-  401: {
-    description: "Token expired",
-    content: {
-      "application/json": {
-        schema: { $ref: "#/components/schemas/ErrorResponse" },
-        examples: {
-          tokenExpired: { value: { code: "AUTH_TOKEN_EXPIRED" } },
-        },
-      },
-    },
-  },
   403: {
-    description: "Authentication required or token invalid",
+    description: "No API key sent, or the key is missing/invalid/revoked",
     content: {
       "application/json": {
         schema: { $ref: "#/components/schemas/ErrorResponse" },
         examples: {
           loginRequired: { value: { code: "AUTH_LOGIN_REQUIRED" } },
-          tokenInvalid: { value: { code: "AUTH_TOKEN_INVALID" } },
-          userTokenInvalid: { value: { code: "AUTH_USER_TOKEN_INVALID" } },
+          apiKeyInvalid: { value: { code: "AUTH_API_KEY_INVALID" } },
           userInactive: { value: { code: "AUTH_USER_INACTIVE" } },
         },
       },
@@ -34,19 +23,25 @@ export const openApiSpec = {
   openapi: "3.0.0",
   info: {
     title: "MD Card API",
-    version: "1.1.0",
+    version: "2.0.0",
     description: [
-      "An API for business partners integrating with MD Card: browse the card catalog and place orders. Pass the token from `POST /login` as a `Bearer` token in the `Authorization` header on every request after that. There is no server-side cart — build one on your side as a list of `{ tierId, quantity }` and only call the API when you're ready to check out.",
+      "An API for business partners integrating with MD Card: browse the card catalog and place orders. MD Card issues your integration an API key; send it as a `Bearer` token in the `Authorization` header on every request. There is no server-side cart — build one on your side as a list of `{ tierId, quantity }` and only call the API when you're ready to check out.",
       "",
-      "All error responses share one shape: `{ \"code\": \"SOME_MACHINE_CODE\" }` (see `ErrorResponse`). Branch on `code`, not on message text (there isn't one). A full walkthrough with worked examples for every step — logging in, browsing, checking out — is in the accompanying API guide.",
-      isSandbox
-        ? "\n\n**This spec was generated from a server currently running in test/sandbox mode.** Endpoints marked \"Sandbox:\" below are behaving as described, and a test-account signup endpoint is available (see Auth) that doesn't exist in production."
-        : "",
+      "All error responses share one shape: `{ \"code\": \"SOME_MACHINE_CODE\" }` (see `ErrorResponse`). Branch on `code`, not on message text (there isn't one). A full walkthrough with worked examples for every step — authenticating, browsing, checking out — is in the accompanying API guide.",
     ].join("\n"),
   },
-
+  servers: [
+    {
+      url:"http://localhost:5000/api",
+    }
+  ],
   tags: [
-    { name: "Auth", description: "Login and access tokens (account creation is sandbox-only)" },
+    {
+      name: "Auth",
+      description: isSandbox
+        ? "Verifying an API key, and (sandbox only) self-service test-account creation."
+        : "Verifying an API key",
+    },
     { name: "Users", description: "User profile" },
     { name: "Card Categories", description: "Top-level card catalog categories" },
     { name: "Card Types", description: "Card types (brands/products) within a category" },
@@ -61,7 +56,9 @@ export const openApiSpec = {
       bearerAuth: {
         type: "http",
         scheme: "bearer",
-        bearerFormat: "JWT",
+        bearerFormat: "mdc_live_...",
+        description:
+          "An API key issued by MD Card, sent as `Authorization: Bearer mdc_live_...`. There's no login step or token expiry to manage - the key is valid until MD Card revokes or rotates it for you.",
       },
     },
     schemas: {
@@ -69,43 +66,6 @@ export const openApiSpec = {
         type: "object",
         properties: {
           code: { type: "string" },
-        },
-        required: ["code"],
-      },
-      OtpRejectedResponse: {
-        type: "object",
-        description:
-          "429 response when a resend is requested before its cooldown/daily cap has elapsed.",
-        properties: {
-          code: { type: "string" },
-          resendAfter: { type: "string", format: "date-time" },
-        },
-        required: ["code"],
-      },
-      VerificationRequiredResponse: {
-        type: "object",
-        properties: {
-          code: { type: "string" },
-          isVerified: { type: "boolean" },
-          resendAfter: { type: "string", format: "date-time" },
-          maxDailyResends: { type: "number" },
-          verificationCode: {
-            type: "string",
-            description: "Sandbox only.",
-          },
-        },
-        required: ["code", "isVerified"],
-      },
-      SignupResponse: {
-        type: "object",
-        properties: {
-          code: { type: "string" },
-          resendAfter: {
-            type: "string",
-            format: "date-time",
-            description: "Present outside sandbox mode, once the initial verification code has been sent.",
-          },
-          maxDailyResends: { type: "number" },
         },
         required: ["code"],
       },
@@ -118,26 +78,51 @@ export const openApiSpec = {
         },
         required: ["valid", "role", "id"],
       },
-      LoginProfile: {
-        type: "object",
-        description: "The shape of `profile` returned by POST /login.",
-        properties: {
-          id: { type: "string" },
-          phone: { type: "string" },
-          name: { type: "string" },
-          role: { type: "string", enum: ["business"] },
-          balance: { type: "number" },
-          isActive: { type: "boolean" },
-          canBuy: { type: "boolean" },
-          canSendCode: { type: "boolean" },
-          createdAt: { type: "string", format: "date-time" },
-          updatedAt: { type: "string", format: "date-time" },
-        },
-      },
+      ...(isSandbox
+        ? {
+            SignupRequest: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "2-50 chars." },
+                phone: { type: "string", description: "Local format, e.g. 0912345678." },
+                password: {
+                  type: "string",
+                  description: "8-50 chars; must include at least one digit and one symbol.",
+                },
+                role: {
+                  type: "string",
+                  enum: ["business", "individual"],
+                  description: "Required by the shared signup validation, but sandbox accounts are always created as \"business\" regardless of what's sent here - that's the only role API keys can be issued for.",
+                },
+              },
+              required: ["name", "phone", "password", "role"],
+            },
+            GetApiKeyRequest: {
+              type: "object",
+              properties: {
+                phone: { type: "string" },
+                password: { type: "string" },
+              },
+              required: ["phone", "password"],
+            },
+            GetApiKeyResponse: {
+              type: "object",
+              description: "The one API key auto-created for this account by POST /signup. Calling this endpoint again returns the same key, not a new one.",
+              properties: {
+                name: { type: "string" },
+                keyPrefix: { type: "string" },
+                secret: {
+                  type: "string",
+                  description: "The full API key - send this as the Bearer token. Unlike a real (non-sandbox) key, this is retrievable again from this endpoint any time, not shown only once.",
+                },
+                createdAt: { type: "string", format: "date-time" },
+              },
+            },
+          }
+        : {}),
       UserProfile: {
         type: "object",
-        description:
-          "The shape of `profile` returned by GET /user. Note this is NOT the same shape as LoginProfile: it has no `id` field, but it does include `verificationStatus`.",
+        description: "The shape of `profile` returned by GET /user.",
         properties: {
           phone: { type: "string" },
           name: { type: "string" },
@@ -160,16 +145,6 @@ export const openApiSpec = {
           codesSentCount: { type: "number" },
           windowStart: { type: "string", format: "date-time", nullable: true },
         },
-      },
-      LoginResponse: {
-        type: "object",
-        properties: {
-          profile: { $ref: "#/components/schemas/LoginProfile" },
-          support: { type: "string" },
-          isVerified: { type: "boolean" },
-          accessToken: { type: "string" },
-        },
-        required: ["profile", "isVerified", "accessToken"],
       },
       UserProfileResponse: {
         type: "object",
@@ -525,233 +500,137 @@ export const openApiSpec = {
     },
   },
   paths: {
-    // Self-service signup is a mobile-app/sandbox-only flow — production
-    // business accounts using this API are created and activated by MD Card
-    // directly, so this route is only listed here in sandbox mode.
     ...(isSandbox
       ? {
-    "/signup": {
-      post: {
-        tags: ["Auth"],
-        summary: "Create account",
-        description:
-          "Sandbox-only: creates a test account that's immediately active and ready to log in with.\n\nExample request:\n```json\n{ \"name\": \"John Doe\", \"phone\": \"0912345678\", \"password\": \"Str0ng!Pass\", \"role\": \"business\" }\n```\nOutside sandbox mode this endpoint does not exist — production business accounts are created and activated by MD Card directly.",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  name: {
-                    type: "string",
-                    example: "John Doe",
-                    description: "2-50 chars; no punctuation/symbols.",
-                  },
-                  phone: {
-                    type: "string",
-                    example: "0912345678",
-                    description: "Libyan format: 09 followed by 8 digits.",
-                  },
-                  password: {
-                    type: "string",
-                    example: "string",
-                    description: "8-50 chars; must include at least one digit and one symbol.",
-                  },
-                  role: {
-                    type: "string",
-                    enum: ["business"],
-                    example: "business",
+          "/signup": {
+            post: {
+              tags: ["Auth"],
+              summary: "Create a sandbox test account",
+              description:
+                "Sandbox only - not available in production, where account creation and API key issuance are handled by MD Card directly. Creates a business-role account with no phone verification and no admin activation step; it's active and ready to use immediately. Call POST /get-api-key with the same phone/password right after this to get a working API key.",
+              requestBody: {
+                required: true,
+                content: {
+                  "application/json": {
+                    schema: { $ref: "#/components/schemas/SignupRequest" },
                   },
                 },
-                required: ["name", "phone", "password", "role"],
               },
-            },
-          },
-        },
-        responses: {
-          201: {
-            description: "Account created",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/SignupResponse" },
-                examples: {
-                  sandbox: { value: { code: "AUTH_USER_CREATED" } },
+              responses: {
+                201: {
+                  description: "Account created",
+                  content: {
+                    "application/json": {
+                      schema: {
+                        type: "object",
+                        properties: { code: { type: "string", example: "AUTH_USER_CREATED" } },
+                      },
+                    },
+                  },
+                },
+                400: {
+                  description: "Missing/invalid field",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/ErrorResponse" },
+                      examples: {
+                        missingFields: { value: { code: "AUTH_REQUIRED_FIELDS_MISSING" } },
+                        invalidRole: { value: { code: "AUTH_INVALID_ROLE" } },
+                        invalidPhone: { value: { code: "CHECK_INVALID_PHONE" } },
+                        invalidPassword: { value: { code: "CHECK_INVALID_PASSWORD_FORMAT" } },
+                        invalidName: { value: { code: "CHECK_INVALID_NAME" } },
+                      },
+                    },
+                  },
+                },
+                409: {
+                  description: "Phone already registered",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/ErrorResponse" },
+                      examples: {
+                        exists: { value: { code: "AUTH_PHONE_ALREADY_REGISTERED" } },
+                      },
+                    },
+                  },
+                },
+                default: {
+                  description: "Error",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/ErrorResponse" },
+                    },
+                  },
                 },
               },
             },
           },
-          400: {
-            description: "Missing/invalid fields",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-                examples: {
-                  missingFields: { value: { code: "AUTH_REQUIRED_FIELDS_MISSING" } },
-                  invalidRole: { value: { code: "AUTH_INVALID_ROLE" } },
-                  invalidName: { value: { code: "CHECK_INVALID_NAME" } },
-                  invalidPhone: { value: { code: "CHECK_INVALID_PHONE" } },
-                  invalidPassword: { value: { code: "CHECK_INVALID_PASSWORD_FORMAT" } },
+          "/get-api-key": {
+            post: {
+              tags: ["Auth"],
+              summary: "Get a sandbox test account's API key",
+              description:
+                "Sandbox only. Authenticates with phone/password directly - no device session or login step needed - and returns the single API key POST /signup auto-created for that account.",
+              requestBody: {
+                required: true,
+                content: {
+                  "application/json": {
+                    schema: { $ref: "#/components/schemas/GetApiKeyRequest" },
+                  },
+                },
+              },
+              responses: {
+                200: {
+                  description: "API key",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/GetApiKeyResponse" },
+                    },
+                  },
+                },
+                400: {
+                  description: "Missing phone or password",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/ErrorResponse" },
+                      examples: { invalid: { value: { code: "AUTH_INVALID_LOGIN" } } },
+                    },
+                  },
+                },
+                401: {
+                  description: "Wrong password",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/ErrorResponse" },
+                      examples: { invalid: { value: { code: "AUTH_INVALID_LOGIN" } } },
+                    },
+                  },
+                },
+                404: {
+                  description: "No account for this phone, or it has no sandbox API key",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/ErrorResponse" },
+                      examples: {
+                        noAccount: { value: { code: "AUTH_INVALID_LOGIN" } },
+                        noKey: { value: { code: "API_KEY_NOT_FOUND" } },
+                      },
+                    },
+                  },
+                },
+                default: {
+                  description: "Error",
+                  content: {
+                    "application/json": {
+                      schema: { $ref: "#/components/schemas/ErrorResponse" },
+                    },
+                  },
                 },
               },
             },
           },
-          409: {
-            description: "Phone already registered",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-                examples: {
-                  taken: { value: { code: "AUTH_PHONE_ALREADY_REGISTERED" } },
-                },
-              },
-            },
-          },
-          429: {
-            description: "Auth rate limit exceeded (20 req / 15 min per IP)",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-                examples: {
-                  rateLimited: { value: { code: "AUTH_RATE_LIMIT_EXCEEDED" } },
-                },
-              },
-            },
-          },
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
-      }
+        }
       : {}),
-
-    "/login": {
-      post: {
-        tags: ["Auth"],
-        summary: "Login",
-        description:
-          "Sandbox: bypasses the phone-verification gate entirely (no SMS sent, no 401). Rate-limited to 20 requests / 15 min per IP.",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  phone: { type: "string", example: "0912345678" },
-                  password: { type: "string", example: "string" },
-                  rememberMe: {
-                    type: "boolean",
-                    description:
-                      "Keep the user logged in for a longer period (90 days) instead of the default session duration (14 days).",
-                  },
-                },
-                required: ["phone", "password"],
-              },
-            },
-          },
-        },
-        responses: {
-          200: {
-            description: "Login success",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/LoginResponse" },
-              },
-            },
-          },
-          400: {
-            description: "Missing phone/password",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-                examples: { invalid: { value: { code: "AUTH_INVALID_LOGIN" } } },
-              },
-            },
-          },
-          401: {
-            description: "Wrong password, or phone not yet verified",
-            content: {
-              "application/json": {
-                schema: {
-                  $ref: "#/components/schemas/VerificationRequiredResponse",
-                },
-                examples: {
-                  wrongPassword: { value: { code: "AUTH_INVALID_LOGIN" } },
-                  verificationRequired: {
-                    value: {
-                      code: "AUTH_VERIFICATION_REQUIRED",
-                      isVerified: false,
-                      resendAfter: "2026-08-11T12:01:00.000Z",
-                      maxDailyResends: 6,
-                    },
-                  },
-                },
-              },
-            },
-          },
-          403: {
-            description: "This account has been disabled from receiving verification codes",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-                examples: {
-                  codeSendingDisabled: { value: { code: "AUTH_CODE_SENDING_DISABLED" } },
-                },
-              },
-            },
-          },
-          404: {
-            description: "No account with this phone number",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-                examples: { notFound: { value: { code: "AUTH_INVALID_LOGIN" } } },
-              },
-            },
-          },
-          429: {
-            description: "Auth rate limit, or verification-code resend not yet allowed",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/OtpRejectedResponse" },
-                examples: {
-                  rateLimited: { value: { code: "AUTH_RATE_LIMIT_EXCEEDED" } },
-                  resendCooldown: {
-                    value: {
-                      code: "AUTH_VERIFICATION_RESEND_NOT_ALLOWED",
-                      resendAfter: "2026-08-11T12:01:00.000Z",
-                    },
-                  },
-                  dailyLimit: {
-                    value: {
-                      code: "AUTH_VERIFICATION_DAILY_LIMIT_REACHED",
-                      resendAfter: "2026-08-12T00:00:00.000Z",
-                    },
-                  },
-                },
-              },
-            },
-          },
-          default: {
-            description: "Error",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ErrorResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
-
     "/verify-access": {
       get: {
         tags: ["Auth"],
