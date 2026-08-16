@@ -2,11 +2,13 @@ import { motion as Motion } from "framer-motion";
 
 import Icon from "../common/Icon";
 
-function AboutSection({ t }) {
+function AboutSection({ t, language }) {
   const fadeUp = {
     hidden: { opacity: 0, y: 28 },
     visible: { opacity: 1, y: 0 },
   };
+
+  const whyIcons = ["secure", "speed", "support", "network"];
 
   return (
     <section
@@ -22,25 +24,36 @@ function AboutSection({ t }) {
           transition={{ duration: 0.6 }}
           className="card-soft flex flex-col items-start gap-6 rounded-2xl border border-brand-200/30 p-6 shadow-lg dark:border-brand-900/60 dark:bg-slate-900/30"
         >
-          <h2 className="text-3xl font-black text-slate-900 dark:text-slate-50 w-fit self-center sm:self-start">
-            {t.aboutPage.title}
-          </h2>
+          <div className="w-full self-center sm:self-start">
+            <span className="eyebrow">
+              {language === "ar" ? "نبذة عنا" : "About the company"}
+            </span>
+            <h2 className="mt-3 text-3xl font-black text-slate-900 dark:text-slate-50">
+              {t.aboutPage.title}
+            </h2>
+          </div>
           <div className="mt-4 space-y-4 leading-8 text-slate-700 dark:text-slate-300">
             {t.aboutPage.body.map((paragraph) => (
               <p key={paragraph}>{paragraph}</p>
             ))}
           </div>
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            <article className="rounded-xl bg-brand-50/80 p-4 ring-1 ring-brand-100 dark:bg-brand-900/20 dark:ring-brand-900/60">
-              <h3 className="text-lg font-bold text-brand-700 dark:text-brand-300">
+            <article className="card-hover rounded-xl bg-brand-50/80 p-5 ring-1 ring-brand-100 dark:bg-brand-900/20 dark:ring-brand-900/60">
+              <div className="inline-flex rounded-xl bg-brand-100 p-2.5 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
+                <Icon name="network" className="w-6" />
+              </div>
+              <h3 className="mt-3 text-lg font-bold text-brand-700 dark:text-brand-300">
                 {t.aboutPage.visionTitle}
               </h3>
               <p className="mt-2 text-slate-700 dark:text-slate-300">
                 {t.aboutPage.vision}
               </p>
             </article>
-            <article className="rounded-xl bg-brand-50/80 p-4 ring-1 ring-brand-100 dark:bg-brand-900/20 dark:ring-brand-900/60">
-              <h3 className="text-lg font-bold text-brand-700 dark:text-brand-300">
+            <article className="card-hover rounded-xl bg-brand-50/80 p-5 ring-1 ring-brand-100 dark:bg-brand-900/20 dark:ring-brand-900/60">
+              <div className="inline-flex rounded-xl bg-brand-100 p-2.5 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
+                <Icon name="support" className="w-6" />
+              </div>
+              <h3 className="mt-3 text-lg font-bold text-brand-700 dark:text-brand-300">
                 {t.aboutPage.missionTitle}
               </h3>
               <p className="mt-2 text-slate-700 dark:text-slate-300">
@@ -58,23 +71,25 @@ function AboutSection({ t }) {
             transition={{ duration: 0.6 }}
             className="card-soft flex flex-col items-start gap-6 rounded-2xl border border-brand-200/30 p-6 shadow-lg dark:border-brand-900/60 dark:bg-slate-900/30"
           >
-            <h3 className="mb-4 text-2xl font-extrabold text-brand-700 dark:text-brand-300  w-fit self-center sm:self-start">
-              {t.why.title}
-            </h3>
-            <div className="grid gap-3 sm:grid-cols-2 mx-auto">
+            <div className="w-fit self-center sm:self-start">
+              <span className="eyebrow">
+                {language === "ar" ? "مميزاتنا" : "Our strengths"}
+              </span>
+              <h3 className="mt-3 text-2xl font-extrabold text-brand-700 dark:text-brand-300">
+                {t.why.title}
+              </h3>
+            </div>
+            <div className="grid w-full gap-4 sm:grid-cols-2">
               {t.why.items.slice(0, 4).map((item, index) => (
                 <Motion.article
                   key={item}
-                  whileHover={{ scale: 1.01 }}
-                  className="flex card-hover aspect-square flex-col justify-around items-center rounded-2xl border border-brand-200/30 shadow-lg"
+                  whileHover={{ y: -4 }}
+                  className="card-hover flex flex-col items-start gap-3 rounded-2xl border border-brand-200/30 bg-white p-5 shadow-lg dark:border-brand-900/60 dark:bg-slate-900/40"
                 >
-                  <div className="inline-flex w-40 items-center justify-center rounded-xl">
-                    <Icon
-                      name={["secure", "speed", "support", "network"][index]}
-                      className="w-30 text-slate-700 dark:text-slate-300"
-                    />
+                  <div className="inline-flex rounded-xl bg-brand-100 p-2.5 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
+                    <Icon name={whyIcons[index]} className="w-6" />
                   </div>
-                  <p className="text-brand-700 dark:text-brand-300 font-semibold leading-8 px-4">
+                  <p className="font-semibold leading-7 text-slate-800 dark:text-slate-100">
                     {item}
                   </p>
                 </Motion.article>

@@ -54,20 +54,16 @@ function App() {
             element={
               <>
                 <HeroSection t={t} language={language} />
-                <AboutSection t={t} />
+                <AboutSection t={t} language={language} />
                 <ServicesSection t={t} language={language} />
-                <ContactSection t={t} />
+                <ContactSection t={t} language={language} />
               </>
             }
           />
         </Routes>
       </main>
 
-      <SiteFooter
-        alamerLogo={alamerLogo}
-        footer={t.footer}
-        language={language}
-      />
+      <SiteFooter alamerLogo={alamerLogo} t={t} language={language} />
     </div>
   );
 }

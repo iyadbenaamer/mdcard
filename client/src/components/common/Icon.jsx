@@ -37,6 +37,13 @@ function Icon({ name, className = "w-6" }) {
           <path d="M12 19v2" />
         </svg>
       );
+    case "mobile":
+      return (
+        <svg {...baseProps}>
+          <rect x="7" y="2.5" width="10" height="19" rx="2" />
+          <path d="M11 18h2" />
+        </svg>
+      );
     case "network":
       return (
         <svg {...baseProps}>

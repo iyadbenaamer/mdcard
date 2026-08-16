@@ -10,6 +10,8 @@ import supportImage from "assets/support.png";
 import ArrowRight from "assets/icons/arrow-right.svg?react";
 import ArrowLeft from "assets/icons/arrow-left.svg?react";
 
+const AUTOPLAY_MS = 5500;
+
 function ServicesSection({ t, language }) {
   const [activeServiceSlide, setActiveServiceSlide] = useState(0);
   const serviceImages = [cardsImage, posImage, distributionImage, supportImage];
@@ -25,10 +27,10 @@ function ServicesSection({ t, language }) {
 
     const intervalId = setInterval(() => {
       setActiveServiceSlide((prev) => (prev + 1) % serviceSlides.length);
-    }, 5500);
+    }, AUTOPLAY_MS);
 
     return () => clearInterval(intervalId);
-  }, [language, serviceSlides.length]);
+  }, [language, serviceSlides.length, activeServiceSlide]);
 
   const goToPrevSlide = () => {
     setActiveServiceSlide(
@@ -48,22 +50,42 @@ function ServicesSection({ t, language }) {
   return (
     <section
       id="services"
-      className="scroll-mt-24 bg-linear-to-br from-brand-50 via-white to-brand-100/70 py-14 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900"
+      className="relative scroll-mt-24 overflow-hidden bg-linear-to-br from-brand-50 via-white to-brand-100/70 py-14 dark:from-slate-950 dark:via-slate-900 dark:to-slate-900"
     >
-      <div className="section-shell min-h-[84vh]">
-        <div className="mb-8 space-y-3 text-center">
+      <div
+        className="bg-dot-grid pointer-events-none absolute inset-0 opacity-60"
+        aria-hidden="true"
+      />
+      <div className="section-shell relative min-h-[84vh]">
+        <Motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.4 }}
+          transition={{ duration: 0.55 }}
+          className="mb-10 flex flex-col items-center gap-3 text-center"
+        >
+          <span className="eyebrow">
+            {language === "ar" ? "ماذا نقدّم" : "What we offer"}
+          </span>
           <h2 className="text-3xl font-black text-slate-900 dark:text-slate-50">
             {t.servicesPage.title}
           </h2>
-        </div>
+        </Motion.div>
 
         <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-          <div className="card-soft overflow-hidden h-fit">
+          <Motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, amount: 0.15 }}
+            transition={{ duration: 0.6 }}
+            className="card-soft h-fit overflow-hidden"
+          >
             <div className="mb-4 flex items-center justify-between">
               <button
                 type="button"
                 onClick={goToPrevSlide}
-                className="rounded-lg border border-brand-200 px-3 py-1 text-sm font-bold text-brand-700 transition hover:bg-brand-50 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-900/30"
+                aria-label={language === "ar" ? "الشريحة السابقة" : "Previous slide"}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-200 text-brand-700 transition hover:-translate-y-0.5 hover:bg-brand-50 hover:shadow-md dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-900/30"
               >
                 {language === "ar" ? (
                   <ArrowRight className="h-5 w-5" />
@@ -78,7 +100,8 @@ function ServicesSection({ t, language }) {
               <button
                 type="button"
                 onClick={goToNextSlide}
-                className="rounded-lg border border-brand-200 px-3 py-1 text-sm font-bold text-brand-700 transition hover:bg-brand-50 dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-900/30"
+                aria-label={language === "ar" ? "الشريحة التالية" : "Next slide"}
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-brand-200 text-brand-700 transition hover:-translate-y-0.5 hover:bg-brand-50 hover:shadow-md dark:border-brand-700 dark:text-brand-300 dark:hover:bg-brand-900/30"
               >
                 {language === "ar" ? (
                   <ArrowLeft className="h-5 w-5" />
@@ -131,23 +154,37 @@ function ServicesSection({ t, language }) {
                   key={slide.title}
                   type="button"
                   onClick={() => setActiveServiceSlide(index)}
-                  className={`h-2.5 rounded-full transition ${index === activeServiceSlide ? "w-8 bg-brand-600" : "w-2.5 bg-brand-200 dark:bg-brand-800"}`}
                   aria-label={`${t.servicesPage.slideAriaLabel} ${formatSlideNumber(index + 1)}`}
-                />
+                  className="group relative h-2.5 w-8 overflow-hidden rounded-full bg-brand-200 dark:bg-brand-800"
+                >
+                  {index === activeServiceSlide && (
+                    <Motion.span
+                      key={activeServiceSlide}
+                      initial={{ width: "0%" }}
+                      animate={{ width: "100%" }}
+                      transition={{ duration: AUTOPLAY_MS / 1000, ease: "linear" }}
+                      className="absolute inset-y-0 inset-s-0 rounded-full bg-brand-600 dark:bg-brand-400"
+                    />
+                  )}
+                </button>
               ))}
             </div>
-          </div>
+          </Motion.div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
             {t.homeServices.items.map((item, index) => (
               <Motion.article
                 key={item.title}
+                initial={{ opacity: 0, y: 18 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, amount: 0.3 }}
+                transition={{ duration: 0.5, delay: index * 0.08 }}
                 className="card-soft card-hover flex flex-col items-center justify-around rounded-2xl border border-brand-200/30 p-4 shadow-lg transition hover:bg-brand-50 dark:border-brand-900/60 dark:bg-slate-900/30 dark:hover:bg-brand-950/45"
               >
-                <div className="mb-2 text-brand-700 dark:text-brand-300">
+                <div className="mb-2 inline-flex rounded-xl bg-brand-100 p-2.5 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
                   <Icon
-                    name={["prepaid", "pos", "support"][index]}
-                    className="w-10"
+                    name={["prepaid", "pos", "support", "mobile"][index]}
+                    className="w-8"
                   />
                 </div>
                 <h4 className="text-lg font-bold text-brand-700 dark:text-brand-300">

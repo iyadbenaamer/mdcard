@@ -1,4 +1,5 @@
 import React from "react";
+import LegalPage from "../components/common/LegalPage";
 
 export default function Privacy({ language = "ar" }) {
   const lang = language;
@@ -134,30 +135,11 @@ export default function Privacy({ language = "ar" }) {
   const data = lang === "ar" ? arabic : english;
 
   return (
-    <div className="mx-auto max-w-4xl p-6">
-      <div className="mb-6">
-        <div>
-          <h1 className="text-2xl font-bold">{data.title}</h1>
-          <p className="text-sm text-gray-500">{data.updated}</p>
-        </div>
-      </div>
-
-      <article
-        dir={lang === "ar" ? "rtl" : "ltr"}
-        lang={lang}
-        className={lang === "ar" ? "text-right" : "text-left"}
-      >
-        {data.sections.map((sec, idx) => (
-          <section key={idx} className="mb-4">
-            <h2 className="mb-2 text-lg font-semibold">{sec.h}</h2>
-            {sec.b.map((p, i) => (
-              <p key={i} className="mb-1 leading-relaxed">
-                {p}
-              </p>
-            ))}
-          </section>
-        ))}
-      </article>
-    </div>
+    <LegalPage
+      title={data.title}
+      updated={data.updated}
+      sections={data.sections}
+      language={lang}
+    />
   );
 }
