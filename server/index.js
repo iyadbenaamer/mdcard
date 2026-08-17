@@ -22,6 +22,7 @@ import transactionRoute from "./routes/transaction.route.js";
 import dealRoute from "./routes/deal.route.js";
 import favoriteRoute from "./routes/favorite.route.js";
 import sessionRoute from "./routes/session.route.js";
+import appVersionRoute from "./routes/appVersion.route.js";
 import connectDB from "./config/db.js";
 import openApiSpec from "./docs/openapi.js";
 import { attachRequestLogger } from "./middleware/requestLog.middleware.js";
@@ -88,6 +89,9 @@ app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
 
 /*ROUTES*/
 app.use("/api/captcha", captchaRoute);
+// Public - checked on every app launch, including before login, so it
+// can't sit behind verifyToken like the routes below it.
+app.use("/api/app-version", appVersionRoute);
 app.use("/api/", authRoute);
 app.use("/api/user", userRoute);
 app.use("/api/search", searchRoute);
