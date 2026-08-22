@@ -9,7 +9,10 @@ const cardTypeSchema = new Schema(
       ref: "CardCategory",
       required: true,
     },
-    name: { type: String, required: true },
+    name: {
+      ar: { type: String, required: true, trim: true },
+      en: { type: String, default: "", trim: true },
+    },
     fulfillmentSource: {
       type: String,
       enum: ["local", "bamboo"],

@@ -20,7 +20,7 @@ const buildCardTypeSearchFilter = (searchTerm) => {
   const orConditions = [];
   for (const p of patterns) {
     const regex = new RegExp(p, "i");
-    orConditions.push({ name: regex });
+    orConditions.push({ "name.ar": regex }, { "name.en": regex });
   }
 
   return orConditions.length > 0 ? { $or: orConditions } : {};

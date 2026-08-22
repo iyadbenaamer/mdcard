@@ -78,6 +78,16 @@ export const openApiSpec = {
         },
         required: ["valid", "role", "id"],
       },
+      LocalizedText: {
+        type: "object",
+        description:
+          "A name/title admin-managed in both languages. `en` is an empty string until an admin fills it in.",
+        properties: {
+          ar: { type: "string" },
+          en: { type: "string" },
+        },
+        required: ["ar", "en"],
+      },
       ...(isSandbox
         ? {
             SignupRequest: {
@@ -171,7 +181,7 @@ export const openApiSpec = {
         type: "object",
         properties: {
           _id: { type: "string" },
-          name: { type: "string" },
+          name: { $ref: "#/components/schemas/LocalizedText" },
           order: { type: "number" },
           count: {
             type: "number",
@@ -182,11 +192,11 @@ export const openApiSpec = {
       CardTier: {
         type: "object",
         description:
-          'The tier shape returned nested under a card type (GET /card-types/get-one), already priced for your account. Example: `{ "_id": "64f...", "title": "$25", "sellPrice": 25, "buyPrice": 22.5, "isAvailable": true }`. Use `buyPrice` as-is — it is the final per-unit price to charge, no further calculation needed.',
+          'The tier shape returned nested under a card type (GET /card-types/get-one), already priced for your account. Example: `{ "_id": "64f...", "title": { "ar": "٢٥ دولار", "en": "$25" }, "sellPrice": 25, "buyPrice": 22.5, "isAvailable": true }`. Use `buyPrice` as-is — it is the final per-unit price to charge, no further calculation needed.',
         properties: {
           _id: { type: "string" },
           typeId: { type: "string" },
-          title: { type: "string" },
+          title: { $ref: "#/components/schemas/LocalizedText" },
           order: { type: "number" },
           sellPrice: { type: "number" },
           buyPrice: {
@@ -207,7 +217,7 @@ export const openApiSpec = {
           _id: { type: "string" },
           typeId: { type: "string" },
           order: { type: "number" },
-          title: { type: "string" },
+          title: { $ref: "#/components/schemas/LocalizedText" },
           buyPrice: { type: "number", nullable: true },
           sellPrice: { type: "number" },
           isActive: { type: "boolean" },
@@ -233,7 +243,7 @@ export const openApiSpec = {
         properties: {
           _id: { type: "string" },
           categoryId: { type: "string" },
-          name: { type: "string" },
+          name: { $ref: "#/components/schemas/LocalizedText" },
           image: { type: "string", nullable: true },
           printImage: { type: "string", nullable: true },
           redeemFormat: {
@@ -267,11 +277,11 @@ export const openApiSpec = {
           _id: { type: "string" },
           userId: { type: "string" },
           cardTypeId: { type: "string" },
-          cardTypeName: { type: "string" },
+          cardTypeName: { $ref: "#/components/schemas/LocalizedText" },
           cardTypeImage: { type: "string", nullable: true },
           cardTypeIsActive: { type: "boolean" },
           categoryId: { type: "string" },
-          categoryName: { type: "string" },
+          categoryName: { $ref: "#/components/schemas/LocalizedText" },
           createdAt: { type: "string", format: "date-time" },
         },
       },
@@ -300,7 +310,7 @@ export const openApiSpec = {
                 nullable: true,
                 properties: {
                   _id: { type: "string" },
-                  name: { type: "string" },
+                  name: { $ref: "#/components/schemas/LocalizedText" },
                   redeemFormat: { type: "string", nullable: true },
                   image: { type: "string", nullable: true },
                   printImage: { type: "string", nullable: true },
@@ -310,7 +320,7 @@ export const openApiSpec = {
             },
           },
           title: {
-            type: "string",
+            allOf: [{ $ref: "#/components/schemas/LocalizedText" }],
             description: "Snapshot of the tier's title at purchase time.",
           },
           price: {
@@ -450,12 +460,12 @@ export const openApiSpec = {
                       nullable: true,
                       properties: {
                         _id: { type: "string" },
-                        name: { type: "string" },
+                        name: { $ref: "#/components/schemas/LocalizedText" },
                       },
                     },
                   },
                 },
-                title: { type: "string" },
+                title: { $ref: "#/components/schemas/LocalizedText" },
                 price: { type: "number" },
                 quantity: { type: "number" },
               },
@@ -492,7 +502,7 @@ export const openApiSpec = {
         type: "object",
         properties: {
           _id: { type: "string" },
-          name: { type: "string" },
+          name: { $ref: "#/components/schemas/LocalizedText" },
           image: { type: "string", nullable: true },
           createdAt: { type: "string", format: "date-time" },
         },
@@ -815,8 +825,8 @@ export const openApiSpec = {
                       type: "object",
                       description: "Shape returned when `typeId` is given.",
                       properties: {
-                        name: { type: "string" },
-                        categoryName: { type: "string" },
+                        name: { $ref: "#/components/schemas/LocalizedText" },
+                        categoryName: { $ref: "#/components/schemas/LocalizedText" },
                         tiers: {
                           type: "array",
                           items: { $ref: "#/components/schemas/CardTierListItem" },
@@ -972,7 +982,7 @@ export const openApiSpec = {
                 schema: {
                   type: "object",
                   properties: {
-                    name: { type: "string" },
+                    name: { $ref: "#/components/schemas/LocalizedText" },
                     cardTypes: {
                       type: "array",
                       items: { $ref: "#/components/schemas/CardType" },

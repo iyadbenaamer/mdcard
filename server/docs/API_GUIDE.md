@@ -68,27 +68,27 @@ There's no human-readable message field — branch on `code`. A few you'll see a
 
 ```
 GET /card-categories
-→ [{ "_id": "...", "name": "Gaming", "order": 1, "count": 8 }]
+→ [{ "_id": "...", "name": { "ar": "الألعاب", "en": "Gaming" }, "order": 1, "count": 8 }]
 
 GET /card-types/by-category?categoryId=...&page=1&limit=10
-→ { "name": "Gaming", "cardTypes": [{ "_id": "...", "name": "Steam Wallet", "image": "..." }] }
+→ { "name": { "ar": "الألعاب", "en": "Gaming" }, "cardTypes": [{ "_id": "...", "name": { "ar": "بطاقة ستيم", "en": "Steam Wallet" }, "image": "..." }] }
 
 GET /card-types/get-one?id=...
 → {
     "_id": "...",
-    "name": "Steam Wallet",
+    "name": { "ar": "بطاقة ستيم", "en": "Steam Wallet" },
     "tiers": [
-      { "_id": "...", "title": "$25", "sellPrice": 25, "buyPrice": 22.5, "isAvailable": true },
-      { "_id": "...", "title": "$50", "sellPrice": 50, "buyPrice": 45, "isAvailable": false }
+      { "_id": "...", "title": { "ar": "٢٥ دولار", "en": "$25" }, "sellPrice": 25, "buyPrice": 22.5, "isAvailable": true },
+      { "_id": "...", "title": { "ar": "٥٠ دولار", "en": "$50" }, "sellPrice": 50, "buyPrice": 45, "isAvailable": false }
     ]
   }
 ```
 
-`GET /card-types/get-one` is the endpoint to build a product page from — each tier's `buyPrice` is already the price your account pays, and `isAvailable` tells you whether it's currently purchasable. Use those values directly; there's no need to recalculate pricing on your end.
+`GET /card-types/get-one` is the endpoint to build a product page from — each tier's `buyPrice` is already the price your account pays, and `isAvailable` tells you whether it's currently purchasable. Use those values directly; there's no need to recalculate pricing on your end. `name`/`title` fields are always returned as `{ ar, en }` — pick whichever language your integration needs; `en` is an empty string until MD Card fills it in for that item.
 
 ```
 GET /search/card-types?query=steam
-→ [{ "_id": "...", "name": "Steam Wallet", "image": "..." }]
+→ [{ "_id": "...", "name": { "ar": "بطاقة ستيم", "en": "Steam Wallet" }, "image": "..." }]
 ```
 
 `GET /favorites`, `POST /favorites { "cardTypeId": "..." }`, and `DELETE /favorites?cardTypeId=...` let you save/unsave card types for quick access later.
@@ -147,7 +147,7 @@ GET /orders?page=1&limit=10
 → { "orders": [{ "_id": "...", "totalAmount": 45, "items": [...] }], "pagination": { "page": 1, "limit": 10, "total": 12, "totalPages": 2, "hasMore": true } }
 
 GET /orders/{id}
-→ { "_id": "...", "totalAmount": 45, "items": [{ "title": "$25", "price": 22.5, "quantity": 2, "cards": [...] }] }
+→ { "_id": "...", "totalAmount": 45, "items": [{ "title": { "ar": "٢٥ دولار", "en": "$25" }, "price": 22.5, "quantity": 2, "cards": [...] }] }
 
 GET /transactions?type=purchase&page=1&limit=10
 → { "transactions": [{ "_id": "...", "type": "purchase", "amount": 45, "balanceBefore": 500, "balanceAfter": 455 }], "pagination": {...} }

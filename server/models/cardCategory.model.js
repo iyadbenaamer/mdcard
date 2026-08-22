@@ -2,7 +2,10 @@ import { Schema, model } from "mongoose";
 
 const cardCategorySchema = new Schema(
   {
-    name: { type: String, required: true },
+    name: {
+      ar: { type: String, required: true, trim: true },
+      en: { type: String, default: "", trim: true },
+    },
     order: { type: Number, required: true },
   },
   { timestamps: true },

@@ -6,7 +6,10 @@ const cardTierSchema = new Schema(
   {
     typeId: { type: ObjectId, ref: "CardType", required: true },
     order: { type: Number, default: 0 },
-    title: { type: String, default: "", required: true, trim: true },
+    title: {
+      ar: { type: String, required: true, trim: true },
+      en: { type: String, default: "", trim: true },
+    },
     buyPrice: { type: Number, default: null },
     buyPriceUsd: { type: Number, default: null },
     sellPrice: { type: Number, required: true },
