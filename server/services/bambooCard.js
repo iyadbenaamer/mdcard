@@ -218,18 +218,7 @@ const normalizeOrderData = (payload) => {
   };
 };
 
-const toBambooStockError = (error) => {
-  const status = error?.response?.status;
-  const message =
-    error?.response?.data?.message ||
-    error?.response?.data?.reason ||
-    error?.message ||
-    "";
-
-  if (status !== 400 || typeof message !== "string") {
-    return null;
-  }
-
+const toBambooStockError = (message, status, error) => {
   const normalizedMessage = message.toLowerCase();
   if (
     !normalizedMessage.includes("not enough") ||
@@ -254,6 +243,54 @@ const toBambooStockError = (error) => {
   transformed.correlationId =
     error?.response?.headers?.["x-correlation-id"] || null;
   return transformed;
+};
+
+// Matches e.g. "Account doesn't have enough funds available to buy the
+// card(s) requested. Balance: 39.4554. Reserved balance: 0.0000. Additional
+// top-up required: 7.7946" — the provider account itself is short on funds,
+// distinct from a specific product being out of stock.
+const toBambooFundsError = (message, status, error) => {
+  const normalizedMessage = message.toLowerCase();
+  if (!normalizedMessage.includes("enough funds")) {
+    return null;
+  }
+
+  const balanceMatch = message.match(
+    /(?<!reserved\s)balance\s*:\s*(\d+(?:\.\d+)?)/i,
+  );
+  const reservedMatch = message.match(
+    /reserved\s*balance\s*:\s*(\d+(?:\.\d+)?)/i,
+  );
+  const topUpMatch = message.match(/top-up required\s*:\s*(\d+(?:\.\d+)?)/i);
+
+  const transformed = new Error("BAMBOO_INSUFFICIENT_FUNDS");
+  transformed.code = "BAMBOO_INSUFFICIENT_FUNDS";
+  transformed.balance = balanceMatch ? Number(balanceMatch[1]) : null;
+  transformed.reservedBalance = reservedMatch ? Number(reservedMatch[1]) : null;
+  transformed.topUpRequired = topUpMatch ? Number(topUpMatch[1]) : null;
+  transformed.providerMessage = message;
+  transformed.status = status;
+  transformed.correlationId =
+    error?.response?.headers?.["x-correlation-id"] || null;
+  return transformed;
+};
+
+const toBambooCheckoutError = (error) => {
+  const status = error?.response?.status;
+  const message =
+    error?.response?.data?.message ||
+    error?.response?.data?.reason ||
+    error?.message ||
+    "";
+
+  if (status !== 400 || typeof message !== "string") {
+    return null;
+  }
+
+  return (
+    toBambooStockError(message, status, error) ||
+    toBambooFundsError(message, status, error)
+  );
 };
 
 export const placeBambooOrder = async ({
@@ -296,9 +333,9 @@ export const placeBambooOrder = async ({
     const response = await client.post(DEFAULT_PLACE_ORDER_PATH, payload);
     return normalizeOrderData(response.data);
   } catch (error) {
-    const stockError = toBambooStockError(error);
-    if (stockError) {
-      throw stockError;
+    const checkoutError = toBambooCheckoutError(error);
+    if (checkoutError) {
+      throw checkoutError;
     }
     throw error;
   }

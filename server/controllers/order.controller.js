@@ -680,16 +680,33 @@ export const checkoutCart = async (req, res) => {
               metadata: {
                 userId: user._id.toString(),
                 tierId: item.tierId.toString(),
-                tierTitle: item.tierTitle,
+                tierTitle: item.tierTitle?.en || item.tierTitle?.ar || "",
               },
             });
           } catch (err) {
-            if (err?.code === "OUT_OF_STOCK") {
+            if (err?.code === "BAMBOO_OUT_OF_STOCK") {
               failureDetails.push({
                 tierId: item.tierId,
                 requested: remainingRequested,
                 available: Number(err.available ?? 0),
                 code: "OUT_OF_STOCK",
+                message: err.providerMessage || null,
+              });
+              return await cancelCheckout(failureDetails);
+            }
+            if (err?.code === "BAMBOO_INSUFFICIENT_FUNDS") {
+              // Provider account itself is short on funds, not a specific
+              // product being out of stock — flag it distinctly so ops can
+              // notice the account needs a top-up, but cancel the same way.
+              console.error(
+                "Bamboo account balance insufficient to fulfill order:",
+                err.providerMessage,
+              );
+              failureDetails.push({
+                tierId: item.tierId,
+                requested: remainingRequested,
+                available: 0,
+                code: "PROVIDER_OUT_OF_FUNDS",
                 message: err.providerMessage || null,
               });
               return await cancelCheckout(failureDetails);
