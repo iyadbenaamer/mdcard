@@ -164,7 +164,7 @@ function SiteFooter({ alamerLogo, t, language = "ar" }) {
       </div>
 
       <div className="relative border-t border-white/10">
-        <div className="section-shell flex flex-col h-20 items-center gap-3 py-6 sm:flex-row sm:justify-between">
+        <div className="section-shell flex flex-col h-40 sm:h-20 items-center gap-3 py-6 sm:flex-row sm:justify-between">
           <p className="text-xs text-slate-400">
             © {new Date().getFullYear()} MD Card - {t.footer.rights}
           </p>
