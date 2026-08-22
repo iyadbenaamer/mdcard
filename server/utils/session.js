@@ -55,6 +55,21 @@ export const enforceSessionCap = async (userId, role) => {
   );
 };
 
+// Revokes any active session this user already has for this exact deviceId
+// before a new one is created. Without this, re-logging in on the same
+// device (e.g. after a reinstall wiped the client's stored token, or just
+// logging in twice) always inserted another Session row for that device and
+// left dedup entirely to enforceSessionCap's LRU eviction - which could even
+// evict a *different*, genuinely-still-in-use device to make room. Tagged
+// "reauthenticated" rather than "evicted" since this is the same device
+// superseding itself, not a different one bumping it.
+const revokeExistingDeviceSession = async (userId, deviceId) => {
+  await Session.updateMany(
+    { user: userId, deviceId, revokedAt: null },
+    { $set: { revokedAt: new Date(), revokedReason: "reauthenticated" } },
+  );
+};
+
 export const createSession = async (
   user,
   {
@@ -67,6 +82,7 @@ export const createSession = async (
     rememberMe = false,
   },
 ) => {
+  await revokeExistingDeviceSession(user._id, deviceId);
   await enforceSessionCap(user._id, user.role);
 
   const token = generateSessionToken();

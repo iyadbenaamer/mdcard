@@ -30,9 +30,13 @@ const sessionSchema = new Schema(
     // evicted device apart from a plain logout/expiry so the app can show
     // "you were signed out because you logged in elsewhere" instead of a
     // generic session-expired message (see AUTH_SESSIONS_PLAN.md §9).
+    // "reauthenticated" is the same-device case (createSession found and
+    // replaced an existing active session for this deviceId) - deliberately
+    // distinct from "evicted" so the client never tells a device it was
+    // bumped by "another device" when it bumped itself.
     revokedReason: {
       type: String,
-      enum: ["logout", "logout_all", "evicted", "admin"],
+      enum: ["logout", "logout_all", "evicted", "admin", "reauthenticated"],
       default: null,
     },
   },
