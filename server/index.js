@@ -92,6 +92,10 @@ app.use("/api/captcha", captchaRoute);
 // Public - checked on every app launch, including before login, so it
 // can't sit behind verifyToken like the routes below it.
 app.use("/api/app-version", appVersionRoute);
+// Public - registers/unregisters a device's Expo push token before it has
+// ever logged in (no User doc to attach the token to yet), so it can't sit
+// behind verifyToken either.
+app.use("/api/device-tokens", deviceTokenRoute);
 app.use("/api/", authRoute);
 app.use("/api/user", userRoute);
 app.use("/api/search", searchRoute);
