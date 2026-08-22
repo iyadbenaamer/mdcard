@@ -13,6 +13,7 @@ import User from "../models/user.model.js";
 import { placeAndResolveBambooOrder } from "../services/bambooCard.js";
 
 import { handleError } from "../utils/errorHandler.js";
+import { recordCardSale } from "../utils/statsTracker.js";
 import {
   getEffectiveBuyPrice,
   getTierPriceForUser,
@@ -532,6 +533,7 @@ export const checkoutCart = async (req, res) => {
 
       requestedItems.push({
         tierId,
+        typeId: tier.typeId?._id || tier.typeId,
         tierTitle: tier.title,
         buyPrice,
         requested,
@@ -828,6 +830,22 @@ export const checkoutCart = async (req, res) => {
         }
       }
       throw err;
+    }
+
+    // Best-effort: update the persistent sold-cards stats counters. These
+    // must not be derived by counting live Card/Order documents, since sold
+    // cards are purged after the admin-configured retention window.
+    try {
+      await Promise.all(
+        requestedItems.map((item) =>
+          recordCardSale({
+            typeId: item.typeId,
+            delta: item.requested,
+          }),
+        ),
+      );
+    } catch (statsError) {
+      console.error("Failed to record card sale stats:", statsError);
     }
 
     user.balance = balanceAfter;

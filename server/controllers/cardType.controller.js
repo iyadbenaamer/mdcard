@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 import CardType from "../models/cardType.model.js";
 import CardCategory from "../models/cardCategory.model.js";
+import CardSaleStat from "../models/cardSaleStat.model.js";
 import Setting from "../models/setting.model.js";
 
 import { handleError } from "../utils/errorHandler.js";
@@ -105,6 +106,37 @@ export const getByCategory = async (req, res) => {
       name: category.name,
       cardTypes,
     });
+  } catch (err) {
+    return handleError(err, res);
+  }
+};
+
+export const getTopSold = async (req, res) => {
+  try {
+    // Ranked off the persistent CardSaleStat counters (incremented at the
+    // moment of sale) rather than a live aggregation over Card documents,
+    // since sold cards are purged after the admin-configured retention
+    // window - see mdcard-panel's utils/autoDelete.js.
+    const topStats = await CardSaleStat.find()
+      .sort({ soldCount: -1 })
+      .limit(10)
+      .populate({
+        path: "typeId",
+        select: "name image categoryId",
+        match: { isActive: true },
+      });
+
+    const cardTypes = topStats
+      .filter((stat) => stat.typeId)
+      .map((stat) => ({
+        _id: stat.typeId._id,
+        categoryId: stat.typeId.categoryId,
+        name: stat.typeId.name,
+        image: stat.typeId.image,
+        soldCount: stat.soldCount,
+      }));
+
+    return res.status(200).json(cardTypes);
   } catch (err) {
     return handleError(err, res);
   }
