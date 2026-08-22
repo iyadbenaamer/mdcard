@@ -15,7 +15,7 @@ const pickDevice = (body = {}) => ({
 
 export const recordRequestLog = async (
   req,
-  { actionType, status, resultCode, userId, remainingAttempts },
+  { actionType, status, resultCode, userId, remainingAttempts, phone, name },
 ) => {
   const ip = req.ip || null;
   // geoip-lite resolves nothing for private/loopback ranges (localhost,
@@ -27,6 +27,8 @@ export const recordRequestLog = async (
     status,
     resultCode: resultCode || null,
     remainingAttempts: remainingAttempts ?? null,
+    phone: phone || null,
+    name: name || null,
     userId: userId || req.user?.id || null,
     authMethod: req.authMethod || null,
     method: req.method,

@@ -31,6 +31,13 @@ const requestLogSchema = new Schema(
     // code) - how many attempts were left after this one, so repeated
     // failures/brute-forcing a code are visible in the audit trail.
     remainingAttempts: { type: Number, default: null },
+    // Raw values as submitted on the request, captured up front before the
+    // handler even knows whether they belong to a real account - so a failed
+    // login against an unregistered phone, or a rejected signup, still shows
+    // what was typed instead of leaving the row blank. `name` is only ever
+    // set for signup (login/verification/password-change never submit one).
+    phone: { type: String, default: null },
+    name: { type: String, default: null },
     // No standalone index here - the { userId, createdAt } compound index
     // below already serves any query that filters on userId alone.
     userId: { type: ObjectId, ref: "User", default: null },

@@ -67,6 +67,7 @@ export const signup = async (req, res) => {
     if (isSandbox) {
       role = "business";
     }
+    req.logAction("signup", { name, phone });
     if (!(name && phone && password && role)) {
       return res.status(400).json({ code: "AUTH_REQUIRED_FIELDS_MISSING" });
     }
@@ -186,7 +187,7 @@ export const checkPhoneForResetPassword = async (req, res) => {
 
 /*LOGIN USER*/
 export const login = async (req, res) => {
-  req.logAction("login");
+  req.logAction("login", { phone: req.body.phone?.trim() });
   try {
     let { phone, password, rememberMe } = req.body;
     phone = phone.trim();
