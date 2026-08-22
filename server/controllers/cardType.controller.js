@@ -185,6 +185,34 @@ export const getOne = async (req, res) => {
             },
             { $unset: "customPricing" },
           ]),
+      // Discounts only ever apply to individual pricing - skip the lookup
+      // entirely for business users, same as the customPricing lookup above.
+      ...(isIndividualUser
+        ? [
+            {
+              $lookup: {
+                from: "discounts",
+                let: { tierId: "$_id" },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: { $eq: ["$tierId", "$$tierId"] },
+                      isActive: true,
+                    },
+                  },
+                  { $limit: 1 },
+                ],
+                as: "discountRecord",
+              },
+            },
+            {
+              $addFields: {
+                discountPercentage: { $first: "$discountRecord.percentage" },
+              },
+            },
+            { $unset: "discountRecord" },
+          ]
+        : []),
       {
         $lookup: {
           from: "cards",
@@ -263,6 +291,7 @@ export const getOne = async (req, res) => {
           customBuyPrice: tier.customBuyPrice,
           customBuyPriceUsd: tier.customBuyPriceUsd,
           dollarRate,
+          discountPercentage: tier.discountPercentage,
         });
         // Return tier with calculated buyPrice, hide internal buyPriceUsd
         const {
@@ -279,6 +308,7 @@ export const getOne = async (req, res) => {
         return {
           ...tierWithoutPrivate,
           buyPrice: effectiveBuyPrice,
+          discountPercentage: tier.discountPercentage || 0,
         };
       });
     }

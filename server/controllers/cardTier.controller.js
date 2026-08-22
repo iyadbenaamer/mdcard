@@ -3,6 +3,7 @@ import CardCategory from "../models/cardCategory.model.js";
 import CardType from "../models/cardType.model.js";
 import CardTier from "../models/cardTier.model.js";
 import CustomPricing from "../models/customPricing.model.js";
+import Discount from "../models/discount.model.js";
 
 import { handleError } from "../utils/errorHandler.js";
 import parsePagination from "../utils/parsePagination.js";
@@ -16,21 +17,21 @@ export const getPaginated = async (req, res) => {
       req.query.page !== undefined && req.query.limit !== undefined;
     const { page, limit } = parsePagination(req.query.page, req.query.limit);
 
-    let typeName = "";
-    let categoryName = "";
+    let typeName = null;
+    let categoryName = null;
     if (typeId) {
       const cardType =
         await CardType.findById(typeId).select("name categoryId");
       if (!cardType) {
         return res.status(404).json({ code: "CARD_TYPE_NOT_FOUND" });
       }
-      typeName = cardType.name ?? "";
+      typeName = cardType.name ?? null;
 
       if (cardType.categoryId) {
         const category = await CardCategory.findById(
           cardType.categoryId,
         ).select("name");
-        categoryName = category?.name ?? "";
+        categoryName = category?.name ?? null;
       }
     }
 
@@ -120,6 +121,58 @@ export const checkAvailability = async (req, res) => {
     );
 
     return res.status(200).json(results);
+  } catch (err) {
+    return handleError(err, res);
+  }
+};
+
+export const getTopDiscounted = async (req, res) => {
+  try {
+    // Discounts only ever apply to individual pricing - business accounts
+    // never see discounted tiers.
+    if (req.user?.role !== "individual") {
+      return res.status(200).json([]);
+    }
+
+    const topDiscounts = await Discount.find({ isActive: true })
+      .sort({ percentage: -1 })
+      .limit(10)
+      .populate({
+        path: "tierId",
+        select: "title sellPrice typeId isActive",
+        match: { isActive: true },
+        populate: {
+          path: "typeId",
+          select: "name image isActive",
+          match: { isActive: true },
+        },
+      });
+
+    const tiers = topDiscounts
+      .filter((discount) => discount.tierId && discount.tierId.typeId)
+      .map((discount) => {
+        const tier = discount.tierId;
+        const type = tier.typeId;
+        const sellPrice = Number(tier.sellPrice) || 0;
+        const discountedPrice =
+          Math.round(
+            (sellPrice * (1 - discount.percentage / 100) + Number.EPSILON) *
+              100,
+          ) / 100;
+
+        return {
+          tierId: tier._id,
+          tierTitle: tier.title,
+          typeId: type._id,
+          typeName: type.name,
+          image: type.image,
+          sellPrice,
+          discountedPrice,
+          percentage: discount.percentage,
+        };
+      });
+
+    return res.status(200).json(tiers);
   } catch (err) {
     return handleError(err, res);
   }

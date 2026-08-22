@@ -38,9 +38,18 @@ export const getTierPriceForUser = ({
   customBuyPrice,
   customBuyPriceUsd,
   dollarRate,
+  discountPercentage,
 }) => {
   if (userRole === "individual") {
-    return Number(sellPrice) || 0;
+    const price = Number(sellPrice) || 0;
+    const pct = Number(discountPercentage) || 0;
+    // Discounts only ever apply to individual pricing - business users pay
+    // buyPrice/buyPriceUsd/CustomPricing, computed below, which never
+    // factors in a discount.
+    if (pct > 0) {
+      return Math.round((price * (1 - pct / 100) + Number.EPSILON) * 100) / 100;
+    }
+    return price;
   }
 
   // Same USD-first priority as the tier's own price: if either custom price

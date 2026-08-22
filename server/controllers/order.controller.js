@@ -5,6 +5,7 @@ import { decryptCardCode, encryptCardCode } from "../utils/cardCodeCrypto.js";
 import Card from "../models/card.model.js";
 import CardTier from "../models/cardTier.model.js";
 import CustomPricing from "../models/customPricing.model.js";
+import Discount from "../models/discount.model.js";
 import Order from "../models/order.model.js";
 import Setting from "../models/setting.model.js";
 import Transaction from "../models/transaction.model.js";
@@ -503,6 +504,15 @@ export const checkoutCart = async (req, res) => {
               tierId,
             });
 
+      // Discounts only ever apply to individual pricing - skip the lookup
+      // entirely for business users.
+      const discountRecord =
+        user.role === "individual"
+          ? await Discount.findOne({ tierId, isActive: true }).select(
+              "percentage",
+            )
+          : null;
+
       const buyPrice = getTierPriceForUser({
         userRole: user.role,
         buyPrice: tier.buyPrice,
@@ -511,6 +521,7 @@ export const checkoutCart = async (req, res) => {
         customBuyPrice: customPriceRecord?.buyPrice,
         customBuyPriceUsd: customPriceRecord?.buyPriceUsd,
         dollarRate,
+        discountPercentage: discountRecord?.percentage,
       });
 
       if (Number.isNaN(buyPrice) || buyPrice <= 0) {
