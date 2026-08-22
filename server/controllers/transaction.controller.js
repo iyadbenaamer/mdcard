@@ -65,7 +65,11 @@ export const get = async (req, res) => {
     const filter = { userId: req.user.id };
 
     if (type) {
-      if (!["deposit", "purchase", "refund"].includes(type)) {
+      if (
+        !["deposit", "gateway_deposit", "purchase", "refund", "exchange_sent", "exchange_received"].includes(
+          type,
+        )
+      ) {
         return res.status(400).json({ code: "TRANSACTION_TYPE_INVALID" });
       }
       filter.type = type;

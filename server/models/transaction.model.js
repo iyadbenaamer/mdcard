@@ -11,7 +11,14 @@ const transactionSchema = new Schema(
     userId: { type: ObjectId, ref: "User", required: true },
     type: {
       type: String,
-      enum: ["deposit", "purchase", "refund"],
+      enum: [
+        "deposit",
+        "gateway_deposit",
+        "purchase",
+        "refund",
+        "exchange_sent",
+        "exchange_received",
+      ],
       required: true,
     },
     amount: { type: Number, required: true, min: 0 },
@@ -20,6 +27,9 @@ const transactionSchema = new Schema(
     orderId: { type: ObjectId, ref: "Order" },
     createdByAdmin: { type: ObjectId, ref: "Admin" },
     originalTransactionId: { type: ObjectId, ref: "Transaction" },
+    // Dpay's session_id - only set for type: "gateway_deposit" (self-serve
+    // wallet top-ups), which credit the wallet without admin involvement.
+    paymentSessionId: { type: Number },
   },
   { timestamps: true },
 );
@@ -30,6 +40,15 @@ transactionSchema.pre("validate", function () {
       throw new Error("TRANSACTION_ADMIN_REQUIRED");
     }
     if (this.cardId || this.tierId || this.orderId) {
+      throw new Error("TRANSACTION_CARD_NOT_ALLOWED");
+    }
+  }
+
+  if (this.type === "gateway_deposit") {
+    if (!this.paymentSessionId) {
+      throw new Error("TRANSACTION_PAYMENT_SESSION_REQUIRED");
+    }
+    if (this.createdByAdmin || this.cardId || this.tierId || this.orderId) {
       throw new Error("TRANSACTION_CARD_NOT_ALLOWED");
     }
   }
