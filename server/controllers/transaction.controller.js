@@ -156,6 +156,15 @@ export const get = async (req, res) => {
         };
       }
 
+      if (txObj.type === "exchange_sent" || txObj.type === "exchange_received") {
+        result.counterpartyName = txObj.counterpartyName;
+        result.counterpartyPhone = txObj.counterpartyPhone;
+        if (txObj.type === "exchange_sent") {
+          result.fee = txObj.fee;
+          result.feePercentage = txObj.feePercentage;
+        }
+      }
+
       return result;
     });
 
