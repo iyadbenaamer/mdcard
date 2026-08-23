@@ -12,7 +12,11 @@ import Setting from "../models/setting.model.js";
 import { isSandboxMode } from "../utils/sandbox.js";
 import { generateApiKeySecret, hashApiKey, getKeyPrefix } from "../utils/apiKey.js";
 import { createDeviceChallenge } from "../utils/deviceChallenge.js";
-import { issueSessionForRequest, DeviceAuthError } from "../services/deviceAuth.js";
+import {
+  issueSessionForRequest,
+  verifyDeviceAttestation,
+  DeviceAuthError,
+} from "../services/deviceAuth.js";
 import {
   MAX_DAILY_RESENDS,
   evaluateResend,
@@ -89,6 +93,22 @@ export const signup = async (req, res) => {
       isActive: isSandbox || role === "individual",
     });
     req.logAction("signup", { userId: newUser._id });
+
+    // Account creation itself is gated on a genuine device, same as every
+    // login-equivalent flow - otherwise a script could mass-create accounts
+    // with no app and no real device at all. The user doc has to exist
+    // first so App Attest's first-ever-key registration has a userId to
+    // bind to (see appAttest.js); if attestation fails, roll it back so no
+    // account, OTP, or phone-number reservation survives a failed check.
+    try {
+      await verifyDeviceAttestation(req, newUser._id);
+    } catch (err) {
+      await User.deleteOne({ _id: newUser._id });
+      if (err instanceof DeviceAuthError) {
+        return res.status(err.status).json({ code: err.code });
+      }
+      throw err;
+    }
 
     const verificationCode = generateCode(6);
     const verificationToken = jwt.sign(
@@ -323,14 +343,18 @@ export const verifyAccount = async (req, res) => {
         await user.save();
         return res.status(401).json({ code: "AUTH_INVALID_CODE" });
       }
-      user.verificationStatus.isVerified = true;
-      user.verificationStatus.token = null;
-      resetCodeState(user.verificationStatus);
-      await user.save();
+      // Attestation must succeed before the code is consumed and the
+      // account marked verified - otherwise a request with no/fake device
+      // attestation at all could still burn the OTP and flip isVerified,
+      // even though issueSession goes on to reject it.
       const sessionResult = await issueSession(user, req, res);
       if (!sessionResult) {
         return; // issueSession already sent the error response
       }
+      user.verificationStatus.isVerified = true;
+      user.verificationStatus.token = null;
+      resetCodeState(user.verificationStatus);
+      await user.save();
       return res.status(200).json({ isVerified: true, ...sessionResult });
     } catch {
       return res.status(401).json({ code: "AUTH_VERIFICATION_TOKEN_EXPIRED" });
@@ -364,6 +388,14 @@ export const resetPassword = async (req, res) => {
       if (user.resetPassword.token !== token) {
         return res.status(401).json({ code: "AUTH_INVALID_RESET_TOKEN" });
       }
+      // Same ordering requirement as verifyAccount: don't touch the
+      // password (or anything else) until attestation has actually
+      // succeeded, otherwise a request with no/fake device attestation
+      // could still overwrite the password before being rejected.
+      const sessionResult = await issueSession(user, req, res);
+      if (!sessionResult) {
+        return; // issueSession already sent the error response
+      }
       const salt = await bcrypt.genSalt();
       const hashedPassword = await bcrypt.hash(password, salt);
       user.password = hashedPassword;
@@ -373,10 +405,6 @@ export const resetPassword = async (req, res) => {
       resetCodeState(user.resetPassword);
       resetCodeState(user.verificationStatus);
       await user.save();
-      const sessionResult = await issueSession(user, req, res);
-      if (!sessionResult) {
-        return; // issueSession already sent the error response
-      }
       return res.status(200).json({
         isVerified: true,
         ...sessionResult,

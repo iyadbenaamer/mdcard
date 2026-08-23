@@ -74,9 +74,18 @@ export const verifyPlayIntegrityToken = async ({ integrityToken, challenge, sand
     throw new Error("PLAY_INTEGRITY_PACKAGE_MISMATCH");
   }
   if (appVerdict !== "PLAY_RECOGNIZED") {
+    // appRecognitionVerdict is Google's own record of whether this binary
+    // was distributed through Play - UNRECOGNIZED_VERSION almost always
+    // means the APK on the device wasn't installed via Play (a sideloaded/
+    // directly-distributed build, or one signed with a different key than
+    // what's registered in Play App Signing), not a server-side
+    // misconfiguration. Logging the full payload here since the verdict
+    // value itself (vs. UNEVALUATED, etc.) tells them apart.
+    console.error("[playIntegrity] app not recognized, full payload:", JSON.stringify(payload));
     throw new Error("PLAY_INTEGRITY_APP_NOT_RECOGNIZED");
   }
   if (!deviceVerdicts.some((verdict) => ACCEPTED_DEVICE_VERDICTS.includes(verdict))) {
+    console.error("[playIntegrity] device not trusted, full payload:", JSON.stringify(payload));
     throw new Error("PLAY_INTEGRITY_DEVICE_NOT_TRUSTED");
   }
 

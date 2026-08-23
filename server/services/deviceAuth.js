@@ -66,12 +66,15 @@ const verifyAttestationForPlatform = async ({ platform, body, challenge, deviceI
   throw new DeviceAuthError("AUTH_DEVICE_PLATFORM_UNSUPPORTED", 400);
 };
 
-// Verifies the device that's logging in is a real, attested phone, then
-// issues a session for it - the single choke point every login-equivalent
-// flow (login, verifyAccount, resetPassword) goes through so a new access
-// token is never handed out without a verified attestation.
-export const issueSessionForRequest = async (user, req, { rememberMe = false } = {}) => {
-  const { platform, deviceId, deviceName, appVersion, challenge } = req.body;
+// Verifies that `req` carries a genuine, current device attestation, without
+// issuing a session - the piece every attestation-gated endpoint needs,
+// including ones that don't (yet) have a user to log in, like signup binding
+// account creation itself to a real device. `userId` is only meaningful for
+// App Attest's first-ever-key registration (see appAttest.js), which has to
+// tie the new key to *some* user id; signup passes the just-created user's id
+// for that.
+export const verifyDeviceAttestation = async (req, userId) => {
+  const { platform, deviceId, challenge } = req.body;
 
   if (!platform || !deviceId || !challenge) {
     throw new DeviceAuthError("AUTH_DEVICE_ATTESTATION_REQUIRED", 400);
@@ -89,22 +92,38 @@ export const issueSessionForRequest = async (user, req, { rememberMe = false } =
   }
 
   const sandbox = isSandboxMode();
-  let attestationProvider;
   try {
-    attestationProvider = await verifyAttestationForPlatform({
+    return await verifyAttestationForPlatform({
       platform,
       body: req.body,
       challenge,
       deviceId,
-      userId: user._id,
+      userId,
       sandbox,
     });
   } catch (err) {
     if (err instanceof DeviceAuthError) {
       throw err;
     }
+    // The client only ever sees the generic code below - log the real
+    // reason (verdict mismatch vs. a Google API error, e.g. permission/auth
+    // failures from a Play Integrity setup that isn't fully linked) since
+    // it's otherwise impossible to tell apart in production.
+    console.error(
+      "[deviceAuth] attestation verification failed:",
+      err?.response?.data || err,
+    );
     throw new DeviceAuthError("AUTH_DEVICE_ATTESTATION_FAILED", 403);
   }
+};
+
+// Verifies the device that's logging in is a real, attested phone, then
+// issues a session for it - the single choke point every login-equivalent
+// flow (login, verifyAccount, resetPassword) goes through so a new access
+// token is never handed out without a verified attestation.
+export const issueSessionForRequest = async (user, req, { rememberMe = false } = {}) => {
+  const attestationProvider = await verifyDeviceAttestation(req, user._id);
+  const { platform, deviceId, deviceName, appVersion } = req.body;
 
   return createSession(user, {
     platform,
