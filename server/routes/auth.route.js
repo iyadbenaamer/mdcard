@@ -94,6 +94,9 @@ router.post("/verify-reset-password/", otpLimiter, verifyResetPasswordCode);
 router.get("/verify-reset-password/", otpLimiter, verifyResetPasswordToken);
 
 //this route recieves the new password to be set by token that entiltels the user to reset the password
-router.post("/reset-password/:token", otpLimiter, resetPassword);
+// verifyFields enforces the same password policy signup does - without it the
+// reset flow was a way to set a password that could never have been chosen at
+// registration (e.g. a single character).
+router.post("/reset-password/:token", otpLimiter, verifyFields, resetPassword);
 
 export default router;
