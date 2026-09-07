@@ -25,7 +25,7 @@ import sessionRoute from "./routes/session.route.js";
 import appVersionRoute from "./routes/appVersion.route.js";
 import walletRoute from "./routes/wallet.route.js";
 import exchangeRoute from "./routes/exchange.route.js";
-import dpayWebhookRoute from "./routes/dpayWebhook.route.js";
+import paynetWebhookRoute from "./routes/paynetWebhook.route.js";
 import notificationRoute from "./routes/notification.route.js";
 import deviceTokenRoute from "./routes/deviceToken.route.js";
 import connectDB from "./config/db.js";
@@ -62,9 +62,9 @@ const corsOptions = {
 app.use(
   express.json({
     limit: "200mb",
-    // Dpay webhook signatures are computed over the exact raw request body
-    // (see utils/dpaySignature.js) - re-serializing req.body could reorder
-    // JSON keys and break the signature match, so the raw bytes are kept too.
+    // Keep the exact raw request bytes around for any webhook that needs to
+    // verify a signature over them (none right now - pay.net.ly's callback is
+    // unsigned - but cheap to retain and awkward to add back later).
     verify: (req, res, buf) => {
       req.rawBody = buf;
     },
@@ -125,9 +125,10 @@ app.use("/api/sessions", sessionRoute);
 app.use("/api/wallet", walletRoute);
 app.use("/api/exchange", exchangeRoute);
 app.use("/api/notifications", notificationRoute);
-// Public - authenticated via Dpay's HMAC signature (see dpayWebhook.route.js),
-// not a bearer token, so it can't sit behind verifyToken.
-app.use("/api/webhooks/dpay", dpayWebhookRoute);
+// Public - pay.net.ly's payment callback carries no bearer token; the handler
+// re-confirms every payment through the authenticated receipt endpoint
+// (see paynetWebhook.route.js), so it can't sit behind verifyToken.
+app.use("/api/webhooks/paynet", paynetWebhookRoute);
 
 /*MONGOOSE SETUP*/
 connectDB();

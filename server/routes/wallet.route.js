@@ -2,9 +2,8 @@ import { Router } from "express";
 
 import {
   getPaymentMethods,
-  getTopupSession,
-  openTopupSession,
-  verifyTopupSession,
+  getTopup,
+  openTopup,
 } from "../controllers/wallet.controller.js";
 
 import { verifyToken } from "../middleware/auth.middleware.js";
@@ -12,8 +11,7 @@ import { verifyToken } from "../middleware/auth.middleware.js";
 const router = Router();
 
 router.get("/payment-methods", verifyToken, getPaymentMethods);
-router.post("/topup/sessions", verifyToken, openTopupSession);
-router.post("/topup/sessions/verify", verifyToken, verifyTopupSession);
-router.get("/topup/sessions/:sessionId", verifyToken, getTopupSession);
+router.post("/topup", verifyToken, openTopup);
+router.get("/topup/:ref", verifyToken, getTopup);
 
 export default router;

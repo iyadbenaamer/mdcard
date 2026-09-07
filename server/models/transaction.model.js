@@ -27,9 +27,10 @@ const transactionSchema = new Schema(
     orderId: { type: ObjectId, ref: "Order" },
     createdByAdmin: { type: ObjectId, ref: "Admin" },
     originalTransactionId: { type: ObjectId, ref: "Transaction" },
-    // Dpay's session_id - only set for type: "gateway_deposit" (self-serve
-    // wallet top-ups), which credit the wallet without admin involvement.
-    paymentSessionId: { type: Number },
+    // The pay.net.ly custom_ref - only set for type: "gateway_deposit"
+    // (self-serve wallet top-ups), which credit the wallet without admin
+    // involvement.
+    paymentRef: { type: String },
     // Balance-exchange fields - only set for "exchange_sent"/"exchange_received".
     // counterpartyName/Phone are snapshots (not populated) so a receiver's
     // record still shows who sent it even if the sender later renames
@@ -61,7 +62,7 @@ transactionSchema.pre("validate", function () {
   }
 
   if (this.type === "gateway_deposit") {
-    if (!this.paymentSessionId) {
+    if (!this.paymentRef) {
       throw new Error("TRANSACTION_PAYMENT_SESSION_REQUIRED");
     }
     if (this.createdByAdmin || this.cardId || this.tierId || this.orderId) {
@@ -94,7 +95,7 @@ transactionSchema.pre("validate", function () {
     if (!this.linkedTransactionId) {
       throw new Error("TRANSACTION_LINKED_REQUIRED");
     }
-    if (this.createdByAdmin || this.orderId || this.paymentSessionId || this.originalTransactionId) {
+    if (this.createdByAdmin || this.orderId || this.paymentRef || this.originalTransactionId) {
       throw new Error("TRANSACTION_CARD_NOT_ALLOWED");
     }
   }
