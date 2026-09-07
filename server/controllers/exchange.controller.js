@@ -10,7 +10,34 @@ import { sendPushNotifications } from "../utils/pushNotifications.js";
 const EXCHANGE_FEE_SETTING_KEY = "نسبة رسوم تحويل الرصيد";
 const EXCHANGE_KEY_MAX_LENGTH = 100;
 
+// Balances are tracked to cents, so a transfer must be at least one cent.
+// Anything smaller cannot be charged to the sender at this precision while
+// still being credited to the recipient - see normalizeExchangeAmount.
+const MIN_EXCHANGE_AMOUNT = 0.01;
+
 const roundToCents = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
+
+// The sender is debited `amount + fee` and the recipient is credited `amount`.
+// Both figures have to come from the *same* cent-aligned number: when the raw
+// request amount was used to credit the recipient but a rounded total was used
+// to debit the sender, a sub-cent transfer (e.g. 0.004) rounded the sender's
+// charge down to zero while still crediting the recipient in full - letting
+// anyone mint balance for free by repeating the request between two accounts
+// they control. Rounding first, then deriving both sides from the result,
+// guarantees the debit is always >= the credit.
+const normalizeExchangeAmount = (amount) => {
+  const raw = Number(amount);
+  if (!Number.isFinite(raw) || raw <= 0) {
+    return { error: { status: 400, code: "EXCHANGE_AMOUNT_INVALID" } };
+  }
+
+  const normalized = roundToCents(raw);
+  if (normalized < MIN_EXCHANGE_AMOUNT) {
+    return { error: { status: 400, code: "EXCHANGE_AMOUNT_TOO_SMALL" } };
+  }
+
+  return { amount: normalized };
+};
 
 const isValidExchangeKey = (value) =>
   typeof value === "string" &&
@@ -70,8 +97,11 @@ export const previewExchange = async (req, res) => {
 
     const feePercentage = await getExchangeFeePercentage();
 
-    const parsedAmount = Number(amount);
-    const hasValidAmount = Number.isFinite(parsedAmount) && parsedAmount > 0;
+    // Preview intentionally still answers for a missing/invalid amount (the
+    // client calls it to resolve the recipient before the amount is typed),
+    // but any amount it does quote is normalized exactly as `send` will.
+    const { amount: parsedAmount } = normalizeExchangeAmount(amount);
+    const hasValidAmount = parsedAmount !== undefined;
     const fee = hasValidAmount ? roundToCents((parsedAmount * feePercentage) / 100) : null;
     const totalCharge = hasValidAmount ? roundToCents(parsedAmount + fee) : null;
 
@@ -98,9 +128,10 @@ export const sendExchange = async (req, res) => {
     if (!isValidExchangeKey(exchangeKey)) {
       return res.status(400).json({ code: "EXCHANGE_KEY_REQUIRED" });
     }
-    const parsedAmount = Number(amount);
-    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
-      return res.status(400).json({ code: "EXCHANGE_AMOUNT_INVALID" });
+    const { amount: parsedAmount, error: amountError } =
+      normalizeExchangeAmount(amount);
+    if (amountError) {
+      return res.status(amountError.status).json({ code: amountError.code });
     }
 
     const { recipient, error } = await resolveRecipient(phone, req.user._id);
