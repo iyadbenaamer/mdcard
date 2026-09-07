@@ -14,6 +14,7 @@ import { placeAndResolveBambooOrder } from "../services/bambooCard.js";
 
 import { handleError } from "../utils/errorHandler.js";
 import { recordCardSale } from "../utils/statsTracker.js";
+import { withTransaction } from "../utils/dbTransaction.js";
 import {
   getEffectiveBuyPrice,
   getTierPriceForUser,
@@ -114,6 +115,12 @@ const withDecryptedCode = (card) => {
 
 const CHECKOUT_KEY_MIN_LENGTH = 8;
 const CHECKOUT_KEY_MAX_LENGTH = 100;
+
+// Upper bounds on what a single checkout request may ask for. Neither is a
+// pricing rule - they exist so one request can't fan out into an unbounded
+// number of per-item database round-trips / provider orders.
+const MAX_CHECKOUT_ITEMS = 50;
+const MAX_ITEM_QUANTITY = 100;
 
 const isValidCheckoutKey = (value) =>
   typeof value === "string" &&
@@ -361,6 +368,8 @@ export const checkoutCart = async (req, res) => {
   req.logAction("checkout", { userId: req.user?.id });
   const reservedCardIds = [];
   const sandboxCreatedIdSet = new Set();
+  // Flipped once the buyer's wallet has been debited - see releaseReservedCards.
+  let checkoutCommitted = false;
 
   const trackReserved = (cards) => {
     for (let card of cards) {
@@ -373,6 +382,11 @@ export const checkoutCart = async (req, res) => {
   };
 
   const releaseReservedCards = async () => {
+    // Once the wallet has actually been charged the cards belong to the buyer.
+    // A later failure (e.g. writing the transaction record) must not hand them
+    // back to the pool, which would leave the buyer paid-but-empty-handed and
+    // the same cards free to be sold to somebody else.
+    if (checkoutCommitted) return;
     if (reservedCardIds.length === 0) return;
 
     if (isSandbox && sandboxCreatedIdSet.size > 0) {
@@ -419,6 +433,9 @@ export const checkoutCart = async (req, res) => {
     if (!Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ code: "CART_ITEMS_REQUIRED" });
     }
+    if (items.length > MAX_CHECKOUT_ITEMS) {
+      return res.status(400).json({ code: "CART_TOO_MANY_ITEMS" });
+    }
 
     const user = await User.findById(req.user.id);
     if (!user) {
@@ -463,7 +480,23 @@ export const checkoutCart = async (req, res) => {
     // Step 1: validate items, check local-only stock, and compute total price
     for (const item of items) {
       const tierId = item?.tierId;
-      const requested = Math.max(1, Number(item?.quantity) || 1);
+
+      // Quantity must be a whole number. A fractional quantity used to be
+      // accepted and silently under-charged the buyer: the price is computed
+      // as buyPrice * quantity, but the reservation loop (`i < quantity`)
+      // hands out Math.ceil(quantity) cards - so quantity 1.0001 charged for
+      // one card and delivered two.
+      const rawQuantity = item?.quantity;
+      const requested =
+        rawQuantity === undefined || rawQuantity === null || rawQuantity === ""
+          ? 1
+          : Number(rawQuantity);
+      if (!Number.isInteger(requested) || requested < 1) {
+        return res.status(400).json({ code: "CART_QUANTITY_INVALID" });
+      }
+      if (requested > MAX_ITEM_QUANTITY) {
+        return res.status(400).json({ code: "CART_QUANTITY_TOO_LARGE" });
+      }
 
       if (!Types.ObjectId.isValid(tierId)) {
         return res.status(400).json({ code: "CARD_TIER_ID_INVALID" });
@@ -796,21 +829,102 @@ export const checkoutCart = async (req, res) => {
       }
     }
 
-    // Step 5: finalize checkout (create order, charge balance, record transaction)
-    const balanceBefore = roundToCents(user.balance);
-    const balanceAfter = roundToCents(balanceBefore - totalCost);
+    // Step 5: finalize checkout (create order, charge balance, record
+    // transaction). These three writes are one financial fact and are
+    // committed together where the deployment allows it - see
+    // utils/dbTransaction.js for why that is conditional.
+    //
+    // Card reservation deliberately stays *outside* this transaction. Bamboo
+    // fulfilment calls an external provider whose purchases cannot be rolled
+    // back, so those cards must survive a failed checkout as unsold inventory
+    // rather than vanishing with an aborted transaction. releaseReservedCards
+    // is the compensating action for that half.
+    let savedOrder = null;
+    let balanceAfter = null;
+    let balanceBefore = null;
 
-    const order = new Order({
-      userId: user._id,
-      checkoutKey,
-      totalAmount: totalCost,
-      items: orderItems,
-    });
-
-    let savedOrder;
     try {
-      savedOrder = await order.save();
+      const { transactional } = await withTransaction(async (session) => {
+        // withTransaction may retry the callback, so every attempt starts from
+        // a clean slate rather than reusing documents built by a prior one.
+        const sessionOpt = session ? { session } : {};
+
+        const order = new Order({
+          userId: user._id,
+          checkoutKey,
+          totalAmount: totalCost,
+          items: orderItems,
+        });
+        savedOrder = await order.save(sessionOpt);
+
+        // Charge the wallet with a single conditional, atomic update rather
+        // than writing back a total derived from the balance read at the top
+        // of this request. The old read-check-then-write let two checkouts
+        // that overlapped in time both pass the Step 2 affordability check and
+        // both persist a balance computed from the same stale figure - so the
+        // second one's spend was silently dropped and the buyer received both
+        // orders' cards while only being charged for one. The `$gte` guard
+        // re-checks affordability against the committed balance at the instant
+        // of the write, so exactly one of any set of racing checkouts wins.
+        const chargedUser = await User.findOneAndUpdate(
+          { _id: user._id, balance: { $gte: totalCost } },
+          { $inc: { balance: -totalCost } },
+          { new: true, ...sessionOpt },
+        );
+
+        if (!chargedUser) {
+          // Balance spent by a concurrent checkout/transfer since Step 2.
+          throw Object.assign(new Error("USER_BALANCE_INSUFFICIENT"), {
+            checkoutFailure: "USER_BALANCE_INSUFFICIENT",
+          });
+        }
+
+        balanceAfter = roundToCents(chargedUser.balance);
+        balanceBefore = roundToCents(balanceAfter + totalCost);
+
+        // Without a transaction the debit above has already landed on its own,
+        // so from here the buyer has paid and the cards are theirs - a later
+        // failure must not hand them back to the pool. Under a transaction the
+        // debit is still provisional, so the flag waits for the commit.
+        if (!session) {
+          checkoutCommitted = true;
+        }
+
+        const transaction = new Transaction({
+          userId: user._id,
+          type: "purchase",
+          amount: totalCost,
+          balanceBefore,
+          balanceAfter,
+          orderId: savedOrder._id,
+        });
+        await transaction.save(sessionOpt);
+      });
+
+      checkoutCommitted = true;
+
+      if (!transactional) {
+        // Fallback mode only: the order, the debit and the ledger entry landed
+        // as three independent writes, so a crash between them can leave the
+        // account inconsistent. Worth knowing about in the logs.
+        console.warn(
+          "[checkout] committed without a transaction (standalone MongoDB)",
+          { orderId: String(savedOrder._id), userId: String(user._id) },
+        );
+      }
     } catch (err) {
+      if (err?.checkoutFailure === "USER_BALANCE_INSUFFICIENT") {
+        // Under a transaction the order was rolled back with the debit; in
+        // fallback mode it was already persisted and has to be removed so its
+        // checkoutKey is freed and the client may legitimately retry. The
+        // delete is a harmless no-op in the transactional case.
+        if (savedOrder?._id) {
+          await Order.deleteOne({ _id: savedOrder._id });
+        }
+        await releaseReservedCards();
+        return res.status(400).json({ code: "USER_BALANCE_INSUFFICIENT" });
+      }
+
       if (err?.code === 11000) {
         // Another request with the same checkoutKey finished this checkout
         // concurrently (the race this key exists to prevent) — release
@@ -829,12 +943,15 @@ export const checkoutCart = async (req, res) => {
           return res.status(201).json(payload);
         }
       }
+
       throw err;
     }
 
     // Best-effort: update the persistent sold-cards stats counters. These
     // must not be derived by counting live Card/Order documents, since sold
-    // cards are purged after the admin-configured retention window.
+    // cards are purged after the admin-configured retention window. Recorded
+    // only once the charge has actually committed, so an order that was rolled
+    // back above never inflates the counters.
     try {
       await Promise.all(
         requestedItems.map((item) =>
@@ -848,22 +965,9 @@ export const checkoutCart = async (req, res) => {
       console.error("Failed to record card sale stats:", statsError);
     }
 
-    user.balance = balanceAfter;
-    await user.save();
-
-    const transaction = new Transaction({
-      userId: user._id,
-      type: "purchase",
-      amount: totalCost,
-      balanceBefore,
-      balanceAfter,
-      orderId: savedOrder._id,
-    });
-    await transaction.save();
-
     const payload = await buildCheckoutSuccessResponse(
       savedOrder,
-      user.balance,
+      balanceAfter,
     );
     return res.status(201).json(payload);
   } catch (err) {
