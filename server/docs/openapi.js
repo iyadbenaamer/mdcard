@@ -30,11 +30,6 @@ export const openApiSpec = {
       "All error responses share one shape: `{ \"code\": \"SOME_MACHINE_CODE\" }` (see `ErrorResponse`). Branch on `code`, not on message text (there isn't one). A full walkthrough with worked examples for every step — authenticating, browsing, checking out — is in the accompanying API guide.",
     ].join("\n"),
   },
-  servers: [
-    {
-      url:"http://localhost:5000/api",
-    }
-  ],
   tags: [
     {
       name: "Auth",
