@@ -53,7 +53,7 @@ const getExchangeFeePercentage = async () => {
 };
 
 // Shared by preview and send so both apply identical eligibility rules.
-const resolveRecipient = async (phone, senderId) => {
+const resolveRecipient = async (phone, senderId, senderRole) => {
   const recipient = await User.findOne({ phone: String(phone || "").trim() });
   if (!recipient) {
     return { error: { status: 404, code: "EXCHANGE_RECIPIENT_NOT_FOUND" } };
@@ -63,6 +63,9 @@ const resolveRecipient = async (phone, senderId) => {
   }
   if (!recipient.isActive) {
     return { error: { status: 400, code: "EXCHANGE_RECIPIENT_INACTIVE" } };
+  }
+  if (senderRole === "individual" && recipient.role === "business") {
+    return { error: { status: 400, code: "EXCHANGE_INDIVIDUAL_TO_BUSINESS_NOT_ALLOWED" } };
   }
   return { recipient };
 };
@@ -92,7 +95,11 @@ export const previewExchange = async (req, res) => {
       return res.status(400).json({ code: "EXCHANGE_PHONE_REQUIRED" });
     }
 
-    const { recipient, error } = await resolveRecipient(phone, req.user._id);
+    const { recipient, error } = await resolveRecipient(
+      phone,
+      req.user._id,
+      req.user.role,
+    );
     if (error) return res.status(error.status).json({ code: error.code });
 
     const feePercentage = await getExchangeFeePercentage();
@@ -134,7 +141,11 @@ export const sendExchange = async (req, res) => {
       return res.status(amountError.status).json({ code: amountError.code });
     }
 
-    const { recipient, error } = await resolveRecipient(phone, req.user._id);
+    const { recipient, error } = await resolveRecipient(
+      phone,
+      req.user._id,
+      req.user.role,
+    );
     if (error) return res.status(error.status).json({ code: error.code });
 
     const feePercentage = await getExchangeFeePercentage();
