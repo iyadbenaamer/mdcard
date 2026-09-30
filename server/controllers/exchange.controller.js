@@ -15,7 +15,8 @@ const EXCHANGE_KEY_MAX_LENGTH = 100;
 // still being credited to the recipient - see normalizeExchangeAmount.
 const MIN_EXCHANGE_AMOUNT = 0.01;
 
-const roundToCents = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
+const roundToCents = (v) =>
+  Math.round((Number(v) + Number.EPSILON) * 100) / 100;
 
 // The sender is debited `amount + fee` and the recipient is credited `amount`.
 // Both figures have to come from the *same* cent-aligned number: when the raw
@@ -47,7 +48,9 @@ const isValidExchangeKey = (value) =>
 // Missing/garbage setting values fall back to 0 ("no fee"), never to an
 // error - a broken/unset setting must not block transfers.
 const getExchangeFeePercentage = async () => {
-  const setting = await Setting.findOne({ key: EXCHANGE_FEE_SETTING_KEY }).select("value");
+  const setting = await Setting.findOne({
+    key: EXCHANGE_FEE_SETTING_KEY,
+  }).select("value");
   const parsed = Number(setting?.value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 };
@@ -65,12 +68,22 @@ const resolveRecipient = async (phone, senderId, senderRole) => {
     return { error: { status: 400, code: "EXCHANGE_RECIPIENT_INACTIVE" } };
   }
   if (senderRole === "individual" && recipient.role === "business") {
-    return { error: { status: 400, code: "EXCHANGE_INDIVIDUAL_TO_BUSINESS_NOT_ALLOWED" } };
+    return {
+      error: {
+        status: 400,
+        code: "EXCHANGE_INDIVIDUAL_TO_BUSINESS_NOT_ALLOWED",
+      },
+    };
   }
   return { recipient };
 };
 
-const notifyRecipientOfExchange = async ({ recipient, senderName, amount, transactionId }) => {
+const notifyRecipientOfExchange = async ({
+  recipient,
+  senderName,
+  amount,
+  transactionId,
+}) => {
   try {
     if (!recipient.pushTokens || recipient.pushTokens.length === 0) return;
     await sendPushNotifications(recipient.pushTokens, {
@@ -109,8 +122,12 @@ export const previewExchange = async (req, res) => {
     // but any amount it does quote is normalized exactly as `send` will.
     const { amount: parsedAmount } = normalizeExchangeAmount(amount);
     const hasValidAmount = parsedAmount !== undefined;
-    const fee = hasValidAmount ? roundToCents((parsedAmount * feePercentage) / 100) : null;
-    const totalCharge = hasValidAmount ? roundToCents(parsedAmount + fee) : null;
+    const fee = hasValidAmount
+      ? roundToCents((parsedAmount * feePercentage) / 100)
+      : null;
+    const totalCharge = hasValidAmount
+      ? roundToCents(parsedAmount + fee)
+      : null;
 
     return res.status(200).json({
       recipient: { name: recipient.name, phone: recipient.phone },
@@ -118,7 +135,9 @@ export const previewExchange = async (req, res) => {
       amount: hasValidAmount ? parsedAmount : null,
       fee,
       totalCharge,
-      sufficientBalance: hasValidAmount ? req.user.balance >= totalCharge : null,
+      sufficientBalance: hasValidAmount
+        ? req.user.balance >= totalCharge
+        : null,
     });
   } catch (err) {
     return handleError(err, res);
@@ -174,7 +193,10 @@ export const sendExchange = async (req, res) => {
       }).save();
     } catch (err) {
       if (err?.code === 11000) {
-        const existing = await Transaction.findOne({ userId: req.user._id, exchangeKey: trimmedKey });
+        const existing = await Transaction.findOne({
+          userId: req.user._id,
+          exchangeKey: trimmedKey,
+        });
         if (existing?.balanceAfter != null) {
           const currentUser = await User.findById(req.user._id);
           return res.status(200).json({
@@ -216,22 +238,35 @@ export const sendExchange = async (req, res) => {
     if (!updatedReceiver) {
       // Extremely rare: recipient deleted between the lookup above and now.
       // Best-effort refund the sender and release the claimed transaction.
-      await User.updateOne({ _id: req.user._id }, { $inc: { balance: totalCharge } });
+      await User.updateOne(
+        { _id: req.user._id },
+        { $inc: { balance: totalCharge } },
+      );
       await Transaction.deleteOne({ _id: senderTx._id });
-      console.error("[exchange] recipient vanished mid-transfer, sender refunded", {
-        senderId: req.user._id,
-        recipientId: recipient._id,
-      });
+      console.error(
+        "[exchange] recipient vanished mid-transfer, sender refunded",
+        {
+          senderId: req.user._id,
+          recipientId: recipient._id,
+        },
+      );
       return res.status(404).json({ code: "EXCHANGE_RECIPIENT_VANISHED" });
     }
 
-    const senderBalanceBefore = roundToCents(updatedSender.balance + totalCharge);
+    const senderBalanceBefore = roundToCents(
+      updatedSender.balance + totalCharge,
+    );
     await Transaction.updateOne(
       { _id: senderTx._id },
-      { balanceBefore: senderBalanceBefore, balanceAfter: updatedSender.balance },
+      {
+        balanceBefore: senderBalanceBefore,
+        balanceAfter: updatedSender.balance,
+      },
     );
 
-    const receiverBalanceBefore = roundToCents(updatedReceiver.balance - parsedAmount);
+    const receiverBalanceBefore = roundToCents(
+      updatedReceiver.balance - parsedAmount,
+    );
     const receiverTx = await new Transaction({
       _id: receiverTxId,
       userId: recipient._id,
